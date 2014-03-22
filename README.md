@@ -18,7 +18,7 @@ Function in Jet
 --------------------------------------
 
 jet.Detect(obj)
-Description: Return the type of object 
+Description: Return the type of object
 
 jet.IsWalkable(obj)
 Description: Check to see if an object can be Iterated. 
