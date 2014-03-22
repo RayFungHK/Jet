@@ -17,7 +17,7 @@ Installation and Configuration
 Function in Jet
 --------------------------------------
 
-jet.Detect(obj)
+jet.Detect(obj) 
 Description: Return the type of object
 
 jet.IsWalkable(obj)
