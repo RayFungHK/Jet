@@ -105,7 +105,8 @@ jet.Ready(callback)
 jet.Trim(text)
 ```
 ```js
-// Check to see the element is the first or the last node in current node set. Equivalent as jet.Is(obj, ':first-child') or jet.Is(obj, ':last-child').
+// Check to see the element is the first or the last node in current node set.
+// Equivalent as jet.Is(obj, ':first-child') or jet.Is(obj, ':last-child').
 jet.ChildAt(obj, type)
 ```
 ```js
@@ -125,7 +126,8 @@ jet.Capitalise(text)
 jet.CamelCase(text)
 ```
 ```js
-// Perform an Asynchronous JavaScript and XML (Ajax) request and apply the JSON or XML object into specified callback function.
+// Perform an Asynchronous JavaScript and XML (Ajax) request and
+// apply the JSON or XML object into specified callback function.
 jet.Ajax(obj)
 ```
 ```js
@@ -173,7 +175,8 @@ jet.BuildQueryString(obj)
 .Each(callback)
 ```
 ```js
-// Get the descendants of each element in the current set of matched elements, filtered by a selector, jet object, array, array-like object, or element.
+// Get the descendants of each element in the current set of matched elements,
+// filtered by a selector, jet object, array, array-like object, or element.
 .Find(selector)
 ```
 ```js
@@ -291,12 +294,14 @@ jet.Prop(obj, prop[, value])
 jet.RemoveProp(obj, prop)
 ```
 ```js
-// Get the value of a style for the first element in the set of matched elements or set one or more styles for every matched element.
+// Get the value of a style for the first element in the set of matched
+// elements or set one or more styles for every matched element.
 .CSS(prop[, value])
 jet.CSS(obj, prop[, value])
 ```
 ```js
-// Add or remove one or more classes from each element in the set of matched elements, depending on either the class’s presence or the value of the switch argument.
+// Add or remove one or more classes from each element in the set of matched
+// elements, depending on either the class’s presence or the value of the switch argument.
 .ToggleClass(prop)
 jet.ToggleClass(obj, prop)
 ```
@@ -311,7 +316,8 @@ jet.AddClass(obj, prop)
 jet.RemoveClass(obj, prop)
 ```
 ```js
-// Get the value of an attribute for the first element in the set of matched elements or set one or more attributes for every matched element.
+// Get the value of an attribute for the first element in the set of matched
+// elements or set one or more attributes for every matched element.
 .Attr(attr[, value])
 jet.Attr(obj, attr[, value])
 ```
@@ -321,7 +327,8 @@ jet.Attr(obj, attr[, value])
 jet.RemoveAttr(obj, attr)
 ```
 ```js
-// Get the innerHTML content of first element of orthe set of matched elements set the innerHTML content from each element in the set of matched elements.
+// Get the innerHTML content of first element of orthe set of matched
+// elements set the innerHTML content from each element in the set of matched elements.
 .Html([value])
 jet.Html(obj[, value])
 ```
@@ -341,17 +348,20 @@ jet.Unbind(obj, event)
 jet.Trigger(obj, event)
 ```
 ```js
-// Check the current matched set of elements against a selector, element, or jet object . Return true if at least one of these elements matched.
+// Check the current matched set of elements against a selector, element,
+// or jet object . Return true if at least one of these elements matched.
 .Is(selector)
 jet.Is(obj, selector)
 ```
 ```js
-// Get the current value of the first element in the set of matched elements or set the value of every matched element.
+// Get the current value of the first element in the set of matched elements
+// or set the value of every matched element.
 .Value(value)
 jet.Value(obj, value)
 ```
 ```js
-// Get the current text (innerText) of the first element in the set of matched elements or set the value of every matched element.
+// Get the current text (innerText) of the first element in the set of matched
+// elements or set the value of every matched element.
 .Text(value)
 jet.Text(obj, value)
 ```
