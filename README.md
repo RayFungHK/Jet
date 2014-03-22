@@ -13,7 +13,6 @@ Installation and Configuration
 ```html
 <script type="text/javascript" src="{path of jet.js}"></script>
 ```
-
 Function in Jet
 --------------------------------------
 ```js
@@ -93,7 +92,8 @@ jet.Extend(obj)
 jet.ExtendObject(objA, objB, inherit)
 ```
 ```js
-// Install a mirroring plugin to jet.
+// Install a
+plugin to jet.
 jet.Install(obj, isFullSet)
 ```
 ```js
@@ -262,156 +262,195 @@ jet.BuildQueryString(obj)
 ```
 ```js
 // Insert content to the end of each element in the set of matched elements.
-.Append(element) mirroring jet.Append(@obj, element)
+.Append(element)
+jet.Append(obj, element)
 ```
 ```js
 // Insert content to the beginning of each element in the set of matched elements.
-.Prepend(element) mirroring jet.Prepend(@obj, element)
+.Prepend(element)
+jet.Prepend(obj, element)
 ```
 ```js
 // Insert every element in the set of matched elements to the end of the target.
-.AppendTo(element) mirroring jet.AppendTo(@obj, element)
+.AppendTo(element)
+jet.AppendTo(obj, element)
 ```
 ```js
 // Insert every element in the set of matched elements to the beginning of the target.
-.PrependTo(element) mirroring jet.PrependTo(@obj, element)
+.PrependTo(element)
+jet.PrependTo(obj, element)
 ```
 ```js
 // Get the value of a property for the first element in the set of matched elements or set one or more properties for every matched element.
-.Prop(prop[, value]) mirroring jet.Prop(@obj, prop[, value])
+.Prop(prop[, value])
+jet.Prop(obj, prop[, value])
 ```
 ```js
 // Remove the property for every matched element.
-.RemoveProp(prop) mirroring jet.RemoveProp(@obj, prop)
+.RemoveProp(prop)
+jet.RemoveProp(obj, prop)
 ```
 ```js
 // Get the value of a style for the first element in the set of matched elements or set one or more styles for every matched element.
-.CSS(prop[, value]) mirroring jet.CSS(@obj, prop[, value])
+.CSS(prop[, value])
+jet.CSS(obj, prop[, value])
 ```
 ```js
 // Add or remove one or more classes from each element in the set of matched elements, depending on either the class’s presence or the value of the switch argument.
-.ToggleClass(prop) mirroring jet.ToggleClass(@obj, prop)
+.ToggleClass(prop)
+jet.ToggleClass(obj, prop)
 ```
 ```js
 // Add one or more classes from each element in the set of matched elements.
-.AddClass(prop) mirroring jet.AddClass(@obj, prop)
+.AddClass(prop)
+jet.AddClass(obj, prop)
 ```
 ```js
 // Remove one or more classes from each element in the set of matched elements.
-.RemoveClass(prop) mirroring jet.RemoveClass(@obj, prop)
+.RemoveClass(prop)
+jet.RemoveClass(obj, prop)
 ```
 ```js
 // Get the value of an attribute for the first element in the set of matched elements or set one or more attributes for every matched element.
-.Attr(attr[, value]) mirroring jet.Attr(@obj, attr[, value])
+.Attr(attr[, value])
+jet.Attr(obj, attr[, value])
 ```
 ```js
 // Remove one or more attributes from each element in the set of matched elements.
-.RemoveAttr(attr) mirroring jet.RemoveAttr(@obj, attr)
+.RemoveAttr(attr)
+jet.RemoveAttr(obj, attr)
 ```
 ```js
 // Get the innerHTML content of first element of orthe set of matched elements set the innerHTML content from each element in the set of matched elements.
-.Html([value]) mirroring jet.Html(@obj[, value])
+.Html([value])
+jet.Html(obj[, value])
 ```
 ```js
 // Bind the callback function to specifed event in every matched element.
-.Bind(event, callback) mirroring jet.Bind(@obj, event, callback)
+.Bind(event, callback)
+jet.Bind(obj, event, callback)
 ```
 ```js
 // Unbind the specifed event in every matched element.
-.Unbind(event) mirroring jet.Unbind(@obj, event)
+.Unbind(event)
+jet.Unbind(obj, event)
 ```
 ```js
 // Fire the specifed event in every matched element.
-.Trigger(event) mirroring jet.Trigger(@obj, event)
+.Trigger(event)
+jet.Trigger(obj, event)
 ```
 ```js
 // Check the current matched set of elements against a selector, element, or jet object . Return true if at least one of these elements matched.
-.Is(selector) mirroring jet.Is(@obj, selector)
+.Is(selector)
+jet.Is(obj, selector)
 ```
 ```js
 // Get the current value of the first element in the set of matched elements or set the value of every matched element.
-.Value(value) mirroring jet.Value(@obj, value)
+.Value(value)
+jet.Value(obj, value)
 ```
 ```js
 // Get the current text (innerText) of the first element in the set of matched elements or set the value of every matched element.
-.Text(value) mirroring jet.Text(@obj, value)
+.Text(value)
+jet.Text(obj, value)
 ```
 ```js
 // Remove the set of matched elements from the DOM.
-.Detach() mirroring jet.Detach(@obj)
+.Detach()
+jet.Detach(obj)
 ```
 ```js
 // Get the previous or next sibling element from the first element of the set of matched elements.
-.Sibling(type) mirroring jet.Sibling(@obj, type)
+.Sibling(type)
+jet.Sibling(obj, type)
 ```
 ```js
 // Check the first element of the set of matched elements has included one or more classes.
-.HasClass(classNameList) mirroring jet.HasClass(@obj, classNameList)
+.HasClass(classNameList)
+jet.HasClass(obj, classNameList)
 ```
 ```js
 // Check the first element of the set of matched elements is active (focus) in current document.
-.IsActive() mirroring jet.IsActive(@obj)
+.IsActive()
+jet.IsActive(obj)
 ```
 ```js
 // Get the CSS value in jUnit object from the first element's position of the set of matched elements.
-.GetUnit(prop) mirroring jet.GetUnit(@obj, prop)
+.GetUnit(prop)
+jet.GetUnit(obj, prop)
 ```
 ```js
 // Get the first element's position of the set of matched elements.
-.Offset() mirroring jet.Offset(@obj)
+.Offset()
+jet.Offset(obj)
 ```
 ```js
 // Get the first element's height of the set of matched elements or set the height for every matched element.
-.Height([value]) mirroring jet.Height(@obj[, value])
+.Height([value])
+jet.Height(obj[, value])
 ```
 ```js
 // Get the first element's height without border, padding and margin of the set of matched elements.
-.InnerHeight() mirroring jet.InnerHeight(@obj)
+.InnerHeight()
+jet.InnerHeight(obj)
 ```
 ```js
 // Get the first element's height with padding and border, even include the margin of the set of matched elements.
-.OuterHeight() mirroring jet.OuterHeight(@obj)
+.OuterHeight()
+jet.OuterHeight(obj)
 ```
 ```js
 // Get the first element's width of the set of matched elements or set the width for every matched element.
-.Width([value]) mirroring jet.Width(@obj[, value])
+.Width([value])
+jet.Width(obj[, value])
 ```
 ```js
 // Get the first element's width without border, padding and margin of the set of matched elements.
-.InnerWidth() mirroring jet.InnerWidth(@obj)
+.InnerWidth()
+jet.InnerWidth(obj)
 ```
 ```js
 // Get the first element's width with padding and border, even include the margin of the set of matched elements.
-.OuterWidth() mirroring jet.OuterWidth(@obj)
+.OuterWidth()
+jet.OuterWidth(obj)
 ```
 ```js
 // Get the parent element from first element of the set of matched element, optionally filtered by a selector.
-.Parent([selector]) mirroring jet.Parent(@obj[, selector])
+.Parent([selector])
+jet.Parent(obj[, selector])
 ```
 ```js
 // Get the ancestors from first element of the set of matched element, optionally filtered by a selector.
-.Parents([selector]) mirroring jet.Parents(@obj[, selector])
+.Parents([selector])
+jet.Parents(obj[, selector])
 ```
 ```js
 // Get the child elements from first element of the set of matched element, optionally filtered by a selector.
-.Childs([selector]) mirroring jet.Childs(@obj[, selector])
+.Childs([selector])
+jet.Childs(obj[, selector])
 ```
 ```js
 // Get the first element's scroll top of the set of matched elements or set the scroll top for every matched element.
-.ScrollTop([value]) mirroring jet.ScrollTop(@obj[, value])
+.ScrollTop([value])
+jet.ScrollTop(obj[, value])
 ```
 ```js
 // Get the first element's scroll left of the set of matched elements or set the scroll left for every matched element.
-.ScrollLeft([value]) mirroring jet.ScrollLeft(@obj[, value])
+.ScrollLeft([value])
+jet.ScrollLeft(obj[, value])
 ```
 ```js
 // Scroll every matched element to specified position.
-.ScrollTo(x, y) mirroring jet.ScrollTo(@obj, x, y)
+.ScrollTo(x, y)
+jet.ScrollTo(obj, x, y)
 ```
 ```js
 // Get the first element's event callback function of the set of matched elements
-.Handler(event) mirroring jet.Handler(@obj, event)
+.Handler(event)
+jet.Handler(obj, event)
 ```
 ```js
 // Encode a set of form elements as a string for submission.
-.Serialize() mirroring jet.Serialize(@obj)
+.Serialize()
+jet.Serialize(obj)
