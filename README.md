@@ -6,9 +6,11 @@ Environments
 
 - [Browser support] IE7+, Firefox, Opera, Safari, Webkit and Chrome
 
-How to use
+Installation and setting
 --------------------------------------
-Put following script tag into your html code
+1. Download the jet.js from http://js-jet.com or https://github.com/RayFungHK/Jet
+2. Put insert the following script tag inside <html>
 ```bash
-<script type="text/javascript" src="./lib/jet.js"></script>
+<script type="text/javascript" src="{your path of jet.js}"></script>
 ```
+3. Enjoy
