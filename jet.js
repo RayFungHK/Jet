@@ -1342,7 +1342,7 @@
 		// @param {PlainObject} params The setting for drag n drop event.
 		// @param {Function} params.mousedown(e) The callback function on mouse down.
 		// @param {Function} params.mousemove(e, preventDefault) The callback function on mouse move, preventDefault is the default callback of drag n drop mouse move, used to update elements top and left.
-		// @param {Function} params.mouseup(e) The callback function on mouse up.
+		// @param {Function} params.mouseup(e, parent) The callback function on mouse up, apply parent element to callback if exists.
 		// @param {String} selector The first parent element that matched with selector, which is use to drag and drop.
 		// @return {jObject}
 		// @added 1.0.2-Beta
@@ -1389,9 +1389,13 @@
 							e.preventDefault();
 						}
 
+						if (jet.isDefined(params) && params.drag) {
+							params.drag.call(elem, e);
+						}
+
 						jet(doc).mouseMove(function (e) {
-							if (jet.isDefined(params) && params.mousemove) {
-								params.mousemove.call(elMove, e, func);
+							if (jet.isDefined(params) && params.move) {
+								params.move.call(elMove, e, func);
 							} else {
 								func.call(elMove, e);
 							}
@@ -1402,8 +1406,8 @@
 								e.preventDefault();
 							}
 
-							if (jet.isDefined(params) && params.mouseup) {
-								params.mouseup.call(elMove, e);
+							if (jet.isDefined(params) && params.drop) {
+								params.drop.call(elem, e, elMove);
 							}
 
 							jet(doc).unbindEvent('mousemove');
