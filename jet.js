@@ -1,5 +1,5 @@
 /*!
- * Jet JavaScript Library v1.0.1-Beta
+ * Jet JavaScript Library v1.0.2-Beta
  * http://js-jet.com/
  *
  * Copyright 2014 Ray Fung
@@ -7,7 +7,7 @@
  * The MIT License is simple and easy to understand and it places almost no restrictions on what you can do with a Jet.
  * You are free to use any Jet in any other project (even commercial projects) as long as the copyright header is left intact.
  *
- *	Date: 2014-03-26T17:41Z
+ *	Date: 2014-03-24T15:39Z
  */
 
 (function() {
@@ -33,7 +33,7 @@
 				jObj.merge(jet.apply(this, arguments[index]));
 			} else {
 				elem = jCore.getRoot(arguments[index]);
-				if (jet.isElement(elem)) {
+				if (jCore.isElement(elem) || jCore.isWindow(elem)) {
 					jObj.add(elem);
 				}
 			}
@@ -338,6 +338,16 @@
 		    return true;
 		},
 
+		// - jet.isWindow(obj)
+		// Check to see if the object is a window object.
+		// @param {Object} obj The object that will be checked to see if a window object.
+		// @return {Boolean}
+		// @added 1.0.2-Beta
+		// - 
+		isWindow: function (obj) {
+			return this.isDefined(obj) && (obj.self === obj || (obj.contentWindow.self && obj.contentWindow.self === obj.contentWindow));
+		},
+
 		// - jet.each(obj, callback)
 		// Seamlessly iterate each item of an array, array-like or object.
 		// @param {Object} obj The object that will be checked to see if it's included in a specified array.
@@ -488,6 +498,9 @@
 			var events = this.events, element = this.element;
 			return function (e) {
 				var index;
+				// Fixed below IE8
+				e = e || win.event;
+
 				for (index in events) {
 					events[index].call(element, e);
 				}
@@ -496,7 +509,7 @@
 	});
 
 	// Clone Function
-	jCore.each(['detect', 'isDefined', 'isElement', 'isArray', 'isObject', 'isFunction', 'isString', 'isEmpty', 'isNumeric', 'isPlainObject', 'inArray', 'isCollection', 'isWalkable', 'isDocument', 'each'], function () {
+	jCore.each(['detect', 'isDefined', 'isElement', 'isArray', 'isObject', 'isFunction', 'isString', 'isEmpty', 'isNumeric', 'isPlainObject', 'inArray', 'isCollection', 'isWalkable', 'isDocument', 'isWindow', 'each'], function () {
 		jet[this] = jCore[this];
 	});
 
@@ -509,6 +522,8 @@
 
 	// Extend jet class, static function
 	jCore.extend(jet, {
+		// @added 1.0.2-Beta
+		version: '1.0.2-Beta',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
@@ -936,7 +951,7 @@
 		// @return {jObject}
 		// - 
 		add: function (element) {
-			if (jet.isElement(element)) {
+			if (jet.isElement(element) || jet.isWindow(element)) {
 				if (!jet.isDefined(element.added) || !element.added) {
 					element.added = true;
 					this.push(element);
@@ -1182,8 +1197,8 @@
 		on: function (event, callback) {
 			if (jet.isDefined(callback)) {
 				if (jet.isFunction(callback)) {
-					jet.bindEvent(this, event, function () {
-						callback.call(this);
+					jet.bindEvent(this, event, function (e) {
+						callback.call(this, e);
 					});
 				}
 			} else {
@@ -1290,6 +1305,114 @@
 		// - 
 		submit: function (callback) {
 			return this.on('submit', callback);
+		},
+
+		// - .mouseDown(callback)
+		// Apply or trigger OnMouseDown event to each of the set of matched elements.
+		// @param {Function} callback The callback function thet will be applied.
+		// @return {jObject}
+		// @added 1.0.2-Beta
+		// - 
+		mouseDown: function (callback) {
+			return this.on('mousedown', callback);
+		},
+
+		// - .mouseUp(callback)
+		// Apply or trigger OnMouseUp event to each of the set of matched elements.
+		// @param {Function} callback The callback function thet will be applied.
+		// @return {jObject}
+		// @added 1.0.2-Beta
+		// - 
+		mouseUp: function (callback) {
+			return this.on('mouseup', callback);
+		},
+
+		// - .mouseMove(callback)
+		// Apply or trigger OnMouseMove event to each of the set of matched elements.
+		// @param {Function} callback The callback function thet will be applied.
+		// @return {jObject}
+		// @added 1.0.2-Beta
+		// - 
+		mouseMove: function (callback) {
+			return this.on('mousemove', callback);
+		},
+
+		// - .dragDrop(params, selector)
+		// Apply Drag n Drop to each of the set of matched elements.
+		// @param {PlainObject} params The setting for drag n drop event.
+		// @param {Function} params.mousedown(e) The callback function on mouse down.
+		// @param {Function} params.mousemove(e, preventDefault) The callback function on mouse move, preventDefault is the default callback of drag n drop mouse move, used to update elements top and left.
+		// @param {Function} params.mouseup(e) The callback function on mouse up.
+		// @param {String} selector The first parent element that matched with selector, which is use to drag and drop.
+		// @return {jObject}
+		// @added 1.0.2-Beta
+		// - 
+		dragDrop: function(params, selector) {
+			jet.each(this, function (i, elem) {
+				var elMove = elem;
+
+				if (jet.isElement(elem)) {
+					if (jet.isDefined(selector)){
+						elMove = jet.parents(elem, selector)[0];
+						if (elMove.nodeType !== 1) {
+							elMove = elem;
+						}
+					}
+
+					jet(elem).attr('draggable', true);
+
+					// Display href onclick event
+					jet(elem).click(function () {
+						return false;
+					});
+
+					jet(elem).bindEvent('dragstart', function (e) {
+						var point = {
+							x: (e.clientX) - jet.offset(elem).left,
+							y: (e.clientY) - jet.offset(elem).top
+						}, func = function (e) {
+							jet.css(elMove, {
+								top: (e.clientY - point.y) + 'px', left: (e.clientX - point.x) + 'px'
+							});
+						};
+
+						jet.css(elMove, 'position', 'absolute');
+
+						// IE8 and below, stop propagation and cancel action
+						if (e.stopPropagation) {
+							e.stopPropagation();
+						}
+						e.cancelBubble = true;
+						e.returnValue = false;
+
+						if (e.preventDefault) {
+							e.preventDefault();
+						}
+
+						jet(doc).mouseMove(function (e) {
+							if (jet.isDefined(params) && params.mousemove) {
+								params.mousemove.call(elMove, e, func);
+							} else {
+								func.call(elMove, e);
+							}
+						});
+
+						jet(doc).mouseUp(function (e) {
+							if (e.preventDefault) {
+								e.preventDefault();
+							}
+
+							if (jet.isDefined(params) && params.mouseup) {
+								params.mouseup.call(elMove, e);
+							}
+
+							jet(doc).unbindEvent('mousemove');
+							jet(doc).unbindEvent('mouseup');
+						});
+					});
+				}
+			});
+			return this;
 		},
 
 		// Animate
@@ -1687,10 +1810,10 @@
 								setValue = value;
 							}
 
-							if (isIE) {
-								this[attrMapping[attr.toLowerCase()] || attr] = setValue;
-							} else {
+							if (this.setAttribute) {
 								this.setAttribute(attr, setValue);
+							} else {
+								this[attrMapping[attr.toLowerCase()] || attr] = setValue;
 							}
 						}
 					});
@@ -1767,29 +1890,30 @@
 			if (matches = eventNameRegex.exec(event)) {
 				evtName = matches[1];
 				subName = matches[2];
-	
+
 				jet.each(obj, function () {
 					if (/^(DOMContentLoaded|onload|onload)$/i.test(evtName) && (this == doc || this == win)) {
 						jet.ready(callback);
 					} else {
-						if (jet.isElement(this)) {
+						if (jet.isElement(this) || jet.isWindow(this)) {
 							if (!this.jEvent) {
 								this.jEvent = {};
-			
-								if (!this.jEvent[evtName]) {
-									this.jEvent[evtName] = new jEvent();
-									this.jEvent[evtName].element = this;
-					
-									if (this.addEventListener) {
-										this.addEventListener(evtName, this.jEvent[evtName].getHandler(), false);
-									} else if (obj.attachEvent) {
-										this.attachEvent(bindMapping[evtName] || 'on' + evtName, this.jEvent[evtName].getHandler());
-									} else {
-										this[bindMapping[evtName] || 'on' + evtName] = this.jEvent[evtName].getHandler();
-									}
-								}
-								this.jEvent[evtName].add(subName, callback);
 							}
+			
+							if (!this.jEvent[evtName]) {
+								this.jEvent[evtName] = new jEvent();
+								this.jEvent[evtName].element = this;
+				
+								if (this.addEventListener) {
+									this.addEventListener(evtName, this.jEvent[evtName].getHandler(), false);
+								} else if (obj.attachEvent) {
+									this.attachEvent(bindMapping[evtName] || 'on' + evtName, this.jEvent[evtName].getHandler());
+								} else {
+									this[bindMapping[evtName] || 'on' + evtName] = this.jEvent[evtName].getHandler();
+								}
+							}
+
+							this.jEvent[evtName].add(subName, callback);
 						}
 					}
 				});
@@ -1812,9 +1936,25 @@
 				evtName = matches[1];
 				subName = matches[2];
 				jet.each(obj, function () {
-					if (jet.isElement(this)) {
+					if (jet.isElement(this) || jet.isWindow(this)) {
 						if (this.jEvent && this.jEvent[evtName]) {
 							this.jEvent[evtName].remove(subName);
+							if (jet.isEmpty(this.jEvent[evtName])) {
+								if (this.removeEventListener) {
+									this.removeEventListener(evtName, function (e) {
+										return e.preventDefault();
+									}, false);
+								} else if (obj.detachevent) {
+									this.detachevent(bindMapping[evtName] || 'on' + evtName, function (e) {
+										return e.preventDefault();
+									});
+								} else {
+									this[bindMapping[evtName] || 'on' + evtName] = function (e) {
+										return e.preventDefault();
+									};
+								}
+								delete this.jEvent[evtName];
+							}
 						}
 					}
 				});
@@ -1834,7 +1974,11 @@
 
 			jet.each(obj, function () {
 				if (doc.createEvent) {
-					e = doc.createEvent('HTMLEvents');
+					if (/(mouse.+)|((un)?click)/i.test(event)) {
+						e = doc.createEvent('MouseEvents');
+					} else {
+						e = doc.createEvent('HTMLEvents');
+					}
 				    e.initEvent(event, true, true);
 				} else if (this.createEventObject) {
 					e = doc.createEventObject();
@@ -1882,6 +2026,7 @@
 					}
 				});
 			} else {
+				obj = [obj];
 				return !!jet(selector).filter(function () {
 					if (jet.inArray(obj, this)) {
 						return true;
@@ -2262,6 +2407,7 @@
 				if (!parent && parent.nodeType == 11) {
 					break;
 				}
+
 				if (!selector || jet.is(elem, selector)) {
 					elements.push(elem);
 				}
