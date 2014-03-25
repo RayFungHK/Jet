@@ -1,5 +1,5 @@
 /*!
- * Jet JavaScript Library v1.0.2-Beta
+ * Jet JavaScript Library v1.0.3-Beta
  * http://js-jet.com/
  *
  * Copyright 2014 Ray Fung
@@ -7,7 +7,7 @@
  * The MIT License is simple and easy to understand and it places almost no restrictions on what you can do with a Jet.
  * You are free to use any Jet in any other project (even commercial projects) as long as the copyright header is left intact.
  *
- *	Date: 2014-03-24T15:39Z
+ *	Date: 2014-03-25T11:52Z
  */
 
 (function() {
@@ -61,6 +61,8 @@
 	submitTypeRegex = /^(submit|button|image|reset|file)$/i,
 	submitNameRegex = /^(input|select|textarea|keygen)$/i,
 	checkableRegex = /^(checkbox|radio)$/i,
+	timestampRegex = /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\+[0-9]{2}:[0-9]{2}|Z)?/,
+	dateformatRegex = /([y]{1,4}|[M]{1,4}|[d]{1,4}|hh|h|HH|H|mm|m|ss|s|tt|t|[f]{1,3}|[F]{1,3})/g,
 
 	// Object Alias
 	win = window,
@@ -96,6 +98,7 @@
 	jColor, // Jet Color Object
 	jAnimate, // Jet Animate Object
 	jUnit, // Jet Unit Object
+	jDateTime = {}, // Jet Date Format Object
 	jEvent, // Jet Event Handler
 	jCSSHooks = {}, // Jet CSS hook
 	jValueHooks = {}, // Jet Value hook
@@ -523,7 +526,7 @@
 	// Extend jet class, static function
 	jCore.extend(jet, {
 		// @added 1.0.2-Beta
-		version: '1.0.2-Beta',
+		version: '1.0.3-Beta',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
@@ -904,6 +907,18 @@
 				});
 			}
 			return queryString.join('&');
+		},
+
+		// - jet.parseDate(value)
+		// Parse the datetime from datetime object of string. Return jDateTime.
+		// @param {String} value The string that will be parsed to jDateTime.
+		// @param {DateTime} value The DateTime object that will be parsed to jDateTime.
+		// @param {Number} value The number that will be parsed to jDateTime.
+		// @return {jDateTime}
+		// @added 1.0.3-Beta
+		// - 
+		parseDate: function (value) {
+			return (new jDateTime()).parseDate(value);
 		}
 	});
 
@@ -3383,12 +3398,237 @@
 		}
 	});
 
-	win.jet = jet;
-	win.jColor = jColor;
-	win.jUnit = jUnit;
-	win.jAnimate = jAnimate;
+	// jDateTime date object
+	jDateTime = function () {
+		
+	};
 
-	//	register css: Hooks
+	// Weekday
+	function getWeekday(value) {
+		switch (value) {
+			case 'Sun': return 1;
+			case 'Mon': return 2;
+			case 'The': return 3;
+			case 'Wed': return 4;
+			case 'Thu': return 5;
+			case 'Fri': return 6;
+			case 'Sat': return 7;
+			default: return '';
+		}
+	}
+
+	function shortMonth(value) {
+		return fullMonth(value).slice(0, 3);
+	}
+
+	function fullMonth(value) {
+		switch (value) {
+			case 1: return 'January';
+			case 2: return 'February'
+			case 3: return 'March';
+			case 4: return 'April';
+			case 5: return 'May';
+			case 6: return 'June';
+			case 7: return 'July';
+			case 8: return 'August';
+			case 9: return 'September';
+			case 10: return 'October';
+			case 11: return 'November';
+			case 12: return 'December';
+			default: return '';
+		}
+	}
+
+	function fullWeekday(value) {
+		switch (value) {
+			case 0: return 'Sunday';
+			case 1: return 'Monday';
+			case 2: return 'Theuday';
+			case 3: return 'Wednesday';
+			case 4: return 'Thursday';
+			case 5: return 'Friday';
+			case 6: return 'Saturday';
+			default: return '';
+		}
+	}
+
+	function shortWeekday(value) {
+		return fullWeekday(value).slice(0, 3);
+	}
+
+	jCore.extend(jDateTime.prototype, {
+		date: null,
+		year: 0,
+		month: 0,
+		day: 0,
+		time: null,
+
+		parseTime: function (value) {
+			var delimited, subValue, time = {};
+
+			delimited = value.split(':');
+			if (delimited.length === 3) {
+				time.hour = parseInt(delimited[0]);
+				time.minute = parseInt(delimited[1]);
+
+				if (delimited[2].indexOf('.') !== -1) {
+					subValue = delimited[2].split('.');
+					time.second = parseInt(subValue[0]);
+					time.millis = parseInt(subValue[1]);
+				} else {
+					time.second = parseInt(delimited[2]);
+					time.millis = 0;
+				}
+
+				return time;
+			} else {
+				return {hour : 0, minute : 0, second : 0, millis : 0};
+			}
+		},
+
+		parseDate: function (value) {
+			var dateString,
+			delimited,
+			subValue;
+
+			if (jCore.isNumeric(value)) {
+				return this.parseDate(new Date(value));
+			} else if (jCore.isFunction(value.getFullYear)) {
+				this.date = value;
+				this.year = this.date.getFullYear();
+				this.month = this.date.getMonth() + 1;
+				this.day = this.date.getDate();
+				this.time = {
+					hour: this.date.getHours(),
+					minute: this.date.getMinutes(),
+					second: this.date.getSeconds(),
+					millis: this.date.getMilliseconds()
+				};
+
+				return this;
+	        } else if (matches = timestampRegex.exec(value)) {
+				// 2014-03-25T08:48:21Z or 2014-03-25T08:48:21+08:00
+				this.year = parseInt(matches[1]);
+				this.month = parseInt(matches[2]);
+				this.day = parseInt(matches[3]);
+				this.time = {
+					hour: parseInt(matches[4]),
+					minute: parseInt(matches[5]),
+					second: parseInt(matches[6]),
+					millis: 0
+				};
+			} else if (jCore.isString(value)) {
+				dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
+				delimited = dateString.split(' ');
+				switch (delimited.length) {
+					case 3:
+						// 2014-03-25 08:48:21.125 or 2014/03/25 08:48:21.125
+						if (delimited[0].indexOf('/') !== -1) {
+							subValue = delimited[0].split('/');
+						} else {
+							subValue = delimited[0].split('.');
+						}
+						this.month = parseInt(subValue[0]);
+						this.day = parseInt(subValue[1]);
+						this.year = parseInt(subValue[2]);
+						this.time = this.parseTime(delimited[1]);
+					case 6:
+						// Tue Mar 25 2014 08:48:21 GMT+0800
+						this.month = getWeekday(delimited[1]);
+						this.day = parseInt(delimited[2]);
+						this.year = parseInt(delimited[3]);
+						this.time = this.parseTime(delimited[4]);
+					break;
+					default:
+						// Not matched
+				}
+			}
+
+			this.date = new Date(this.year, this.month, this.day, this.time.hour, this.time.minute, this.time.second, this.time.millis);
+
+			return this;
+		},
+
+		toString: function (format) {
+			var datestring = format, value, d = this.date;
+			return datestring.replace(dateformatRegex, function (str, pattern, offset, org) {
+				switch (pattern) {
+					case 'yyyy':
+					case 'yyy':
+						return d.getFullYear().toString();
+					case 'yy':
+						return d.getFullYear().toString().slice(-2);
+					case 'y':
+						return d.getFullYear().toString().slice(-1);
+					case 'MMMM':
+						return fullMonth(d.getMonth() + 1);
+					case 'MMM':
+						return shortMonth(d.getMonth() + 1);
+					case 'MM':
+						value = d.getMonth() + 1;
+						return (value < 10) ? '0' + value : value;
+					case 'M':
+						return (d.getMonth() + 1);
+					case 'dddd':
+						return fullWeekday(d.getDay());
+					case 'ddd':
+						return shortWeekday(d.getDay());
+					case 'dd':
+						value = d.getDate() + 1;
+						return (value < 10) ? '0' + value : value;
+					case 'd':
+						return (d.getDate() + 1);
+					case 'HH':
+						value = d.getHours();
+						return (value < 10) ? '0' + value : value;
+					case 'H':
+						return d.getHours();
+					case 'hh':
+						value = d.getHours();
+						if (value > 12) {
+							value -= 12;
+						}
+						return (value < 10) ? '0' + value : value;
+					case 'h':
+						value = d.getHours();
+						return (value > 12) ? value - 12 : value;
+					case 'mm':
+						value = d.getMinutes();
+						return (value < 10) ? '0' + value : value;
+					case 'm':
+						return d.getMinutes();
+					case 'ss':
+						value = d.getSeconds();
+						return (value < 10) ? '0' + value : value;
+					case 's':
+						return d.getSeconds();
+					case 'tt':
+						return (d.getHours() >= 12) ? 'PM' : 'AM';
+					case 't':
+						return (d.getHours() >= 12) ? 'P' : 'A';
+					case 'FFF':
+						return d.getMilliseconds().toString().replace(/0+$/, '');
+					case 'FF':
+						return d.getMilliseconds().toString().slice(0, 2).replace(/0+$/, '') || '0';
+					case 'F':
+						return d.getMilliseconds().toString().slice(0, 1).replace(/0+$/, '') || '0';
+					case 'fff':
+						value = d.getMilliseconds().toString();
+						return '000'.substring(0, '000'.length - value.length) + value;
+					case 'ff':
+						value = d.getMilliseconds().toString().slice(0, 2);
+						return (value.length === 1) ? value + '0' : value;
+					case 'f':
+						return d.getMilliseconds().toString().slice(0, 1);
+				}
+				return datestring;
+			});
+		}
+	});
+
+	win.jet = jet;
+
+	//register css: Hooks
 	jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
 		jet.registerCSSHook(css, function (obj, prop, value) {
 			var setValue = 0, elem;
