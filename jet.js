@@ -1,5 +1,5 @@
 /*!
- * Jet JavaScript Library v1.0.3-Beta
+ * Jet JavaScript Library v1.0.4-Beta
  * http://js-jet.com/
  *
  * Copyright 2014 Ray Fung
@@ -7,15 +7,12 @@
  * The MIT License is simple and easy to understand and it places almost no restrictions on what you can do with a Jet.
  * You are free to use any Jet in any other project (even commercial projects) as long as the copyright header is left intact.
  *
- *	Date: 2014-03-25T11:52Z
+ *    Date: 2014-03-31T14:25Z
  */
-
-(function() {
+(function () {
 	var jet = function () {
 		var index, selector, jObj, elem;
-
 		jObj = new jObject();
-
 		for (index = 0; index < arguments.length; index++) {
 			if (!arguments[index]) continue;
 			if (jet.isString(arguments[index])) {
@@ -25,7 +22,7 @@
 					jObj.merge(jet.shift(arguments[index]));
 				} else {
 					// CSS Selector
-					jObj.merge(jEngine.get(arguments[index]));
+					jObj.merge(launchJet(arguments[index]));
 				}
 			} else if (jet.isFunction(arguments[index])) {
 				jet.ready(arguments[index]);
@@ -38,126 +35,161 @@
 				}
 			}
 		}
-
 		jObj.finalize();
 		return jObj;
 	},
-
-	// Regular Expression
-	selectorRegex = /(([\.#])?([a-z0-9_\-]+|\*)([#\.][^\s#,\.]+)*(\[[^:]*\]|(:[a-z\-]+(\([^\)]+\))?))*(\s*[+>~]\s*|\s*,?\s*))+?/gi,
-	tagNameRegex = /^[^#\.]+/ig,
-	attrRegex = /(((:[a-z\-]+)(\([^\)]+\))?)|(\[[^\]]*\]))/gi,
-	attributeSelectorRegex = /\[([a-z_]+)(([~!\|\^$\*]?)=((\"(.*)\")|(\'(.*)\')|([\w\s]*)))?\]/gi,
-	attributeRegex = /\[([a-z_]+)(([~!\|\^$\*]?)=((\"(.*)\")|(\'(.*)\')|([\w\s]*)))?\]/i,
-	pseudoSelectorRegex = /:[a-z\-]+(\(([^\)]+)\))?/gi,
-	pseudoRegex = /:([a-z\-]+)(\(([^\)]+)\))?/i,
-	subAttrRegex = /([#\.])([^#\.]+)/gi,
-	nthRegex = /nth(-(last))?-(child|of-type)/i,
-	nthValueRegex = /(-)?((([0-9]*)n)|([0-9]+))(([+\-])([0-9]+))?/i,
-	hexRegex = /([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})?/i,
-	unitRegex = /(-?[0-9\.]+)\s*([a-z%]*)/i,
-	colorRegex = /rgb\(([0-9]+),\s*([0-9]+),\s*([0-9]+)\)/i,
-	eventNameRegex = /(\w+)(\.([\w_\-]+))?/i,
-	submitTypeRegex = /^(submit|button|image|reset|file)$/i,
-	submitNameRegex = /^(input|select|textarea|keygen)$/i,
-	checkableRegex = /^(checkbox|radio)$/i,
-	timestampRegex = /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\+[0-9]{2}:[0-9]{2}|Z)?/,
-	dateformatRegex = /([y]{1,4}|[M]{1,4}|[d]{1,4}|hh|h|HH|H|mm|m|ss|s|tt|t|[f]{1,3}|[F]{1,3})/g,
-
-	// Object Alias
-	win = window,
-	doc = win.document,
-	nav = navigator,
-	iframe = null,
-	defaultStyles = {},
-
-	// Define Browser
-	isChrome = /Chrome/.test(nav.userAgent),
-	isSafari = /Apple.*Safari/.test(nav.vendor),
-	isOpera = !!win.opera || nav.userAgent.indexOf(' OPR/') >= 0,
-	isFirefox = /Firefox/.test(nav.userAgent),
-	isIE = /MSIE/.test(nav.userAgent),
-	attrMapping = {
-		'accesskey': 'accessKey',
-		'class': 'className',
-		'colspan': 'colSpan',
-		'for': 'htmlFor',
-		'maxlength': 'maxLength',
-		'readonly': 'readOnly',
-		'rowspan': 'rowSpan',
-		'tabindex': 'tabIndex',
-		'valign': 'vAlign',
-		'cellspacing': 'cellSpacing',
-		'cellpadding': 'cellPadding'
-	},
-
-	// Jet Object
-	jCore, // Internal Module
-	jEngine, // Controller
-	jObject, // Jet Object
-	jColor, // Jet Color Object
-	jAnimate, // Jet Animate Object
-	jUnit, // Jet Unit Object
-	jDateTime = {}, // Jet Date Format Object
-	jEvent, // Jet Event Handler
-	jCSSHooks = {}, // Jet CSS hook
-	jValueHooks = {}, // Jet Value hook
-	jPropHooks = {}, // Jet Prop hook
-	jUnitHooks = {}, // Jet Unit hook
-
-	// Binding
-	propBinding = {'for': 'htmlFor', 'class': 'className'},
-
-	objMethod = Object.prototype,
-	container = doc.createElement('div');
-
+		// Regular Expression
+		selectorRegex = /(([\.#])?([a-z0-9_\-]+|\*)([#\.][^\s#,\.]+)*(\[[^:]*\]|(:[a-z\-]+(\([^\)]+\))?))*(\s*[+>~]\s*|\s*,?\s*))+?/gi,
+		tagNameRegex = /^[^#\.]+/ig,
+		attrRegex = /(((:[a-z\-]+)(\([^\)]+\))?)|(\[[^\]]*\]))/gi,
+		attributeSelectorRegex = /\[([a-z_]+)(([~!\|\^$\*]?)=((\"(.*)\")|(\'(.*)\')|([\w\s]*)))?\]/gi,
+		attributeRegex = /\[([a-z_]+)(([~!\|\^$\*]?)=((\"(.*)\")|(\'(.*)\')|([\w\s]*)))?\]/i,
+		pseudoSelectorRegex = /:[a-z\-]+(\(([^\)]+)\))?/gi,
+		pseudoRegex = /:([a-z\-]+)(\(([^\)]+)\))?/i,
+		subAttrRegex = /([#\.])([^#\.]+)/gi,
+		nthRegex = /nth(-(last))?-(child|of-type)/i,
+		nthValueRegex = /(-)?((([0-9]*)n)|([0-9]+))(([+\-])([0-9]+))?/i,
+		hexRegex = /([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})?/i,
+		unitRegex = /(-?[0-9\.]+)\s*([a-z%]*)/i,
+		colorRegex = /rgb\(([0-9]+),\s*([0-9]+),\s*([0-9]+)\)/i,
+		eventNameRegex = /(\w+)(\.([\w_\-]+))?/i,
+		submitTypeRegex = /^(submit|button|image|reset|file)$/i,
+		submitNameRegex = /^(input|select|textarea|keygen)$/i,
+		checkableRegex = /^(checkbox|radio)$/i,
+		timestampRegex = /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\+[0-9]{2}:[0-9]{2}|Z)?/,
+		dateformatRegex = /([y]{1,4}|[M]{1,4}|[d]{1,4}|hh|h|HH|H|mm|m|ss|s|tt|t|[f]{1,3}|[F]{1,3})/g,
+		// Object Alias
+		win = window,
+		doc = win.document,
+		nav = navigator,
+		iframe = null,
+		defaultStyles = {},
+		// Define Browser
+		isChrome = /Chrome/.test(nav.userAgent),
+		isSafari = /Apple.*Safari/.test(nav.vendor),
+		isOpera = !! win.opera || nav.userAgent.indexOf(' OPR/') >= 0,
+		isFirefox = /Firefox/.test(nav.userAgent),
+		isIE = /MSIE/.test(nav.userAgent),
+		attrMapping = {
+			'accesskey': 'accessKey',
+			'class': 'className',
+			'colspan': 'colSpan',
+			'for': 'htmlFor',
+			'maxlength': 'maxLength',
+			'readonly': 'readOnly',
+			'rowspan': 'rowSpan',
+			'tabindex': 'tabIndex',
+			'valign': 'vAlign',
+			'cellspacing': 'cellSpacing',
+			'cellpadding': 'cellPadding'
+		},
+		// DateTime Mapping
+		weekdayMap = {
+			Sun: 1,
+			Mon: 2,
+			The: 3,
+			Wed: 4,
+			Thu: 5,
+			Fri: 6,
+			Sat: 7
+		},
+		monthString = {
+			1: 'January',
+			2: 'February',
+			3: 'March',
+			4: 'April',
+			5: 'May',
+			6: 'June',
+			7: 'July',
+			8: 'August',
+			9: 'September',
+			10: 'October',
+			11: 'November',
+			12: 'December'
+		},
+		weekdayString = {
+			0: 'Sunday',
+			1: 'Monday',
+			2: 'Theuday',
+			3: 'Wednesday',
+			4: 'Thursday',
+			5: 'Friday',
+			6: 'Saturday'
+		},
+		// Easing Type
+		easingType = {
+			linear: function (percent) {
+				return percent;
+			},
+			swing: function (percent) {
+				return 0.5 - Math.cos(percent * Math.PI) / 2;
+			},
+			easingIn: function (percent) {
+				return (1 - (Math.cos((percent / 2) * Math.PI)));
+			},
+			easingOut: function (percent) {
+				return (Math.cos(((1 - percent) / 2) * Math.PI));
+			}
+		},
+		// Jet Object
+		jCore, // Internal Module
+		jObject, // Jet Object
+		jCSSHooks = {},
+		// Jet CSS hook
+		jValueHooks = {},
+		// Jet Value hook
+		jPropHooks = {},
+		// Jet Prop hook
+		jUnitHooks = {},
+		// Jet Unit hook
+		// Binding
+		propBinding = {
+			'for': 'htmlFor',
+			'class': 'className'
+		},
+		objMethod = Object.prototype,
+		container = doc.createElement('div');
 	// Internal Use
 	jCore = {
 		onLoadEvent: [],
 		readyOnLoad: function () {
-			var index = 0, callback;
+			var index = 0,
+				callback;
 			while (callback = jCore.onLoadEvent[index++]) {
 				callback.call(this);
 			}
 			jCore.onLoadEvent = [];
 		},
-
 		extend: function (objA, objB, inherit) {
-			var name = '';
-
-			if (objA && jCore.isObject(objB)) {
+			var name = '', objA = objA || {};
+			if (jCore.isObject(objB)) {
 				for (name in objB) {
 					if (!inherit || !jCore.isDefined(objA[name])) {
-						objA[name] = objB[name];
+						objA[name] = jCore.clone(objB[name]);
 					}
 				}
 			}
-			return this;
+			return objA;
 		},
-
 		defaultStyle: function (tagName, styles) {
-			var style = defaultStyles[tagName], elem, tDoc = doc;
-
+			var style = defaultStyles[tagName],
+				elem, tDoc = doc;
 			if (!style) {
-				iframe = (iframe || jet('<iframe frameborder="0" width="0" height="0" />')).appendTo(tDoc.documentElement);
-
+				iframe = (iframe || jet('<iframe frameborder="0" width="0" height="0" />'))
+					.appendTo(tDoc.documentElement);
 				tDoc = iframe[0].contentDocument;
 				tDoc.write();
 				tDoc.close();
-			
-				elem = jet(tDoc.createElement(tagName)).appendTo(tDoc.body),
-				style = defaultStyles[tagName] = {
-					display: elem.css('display'),
-					overflow: elem.css('overflow')
+				elem = jet(tDoc.createElement(tagName))
+					.appendTo(tDoc.body), style = defaultStyles[tagName] = {
+						display: elem.css('display'),
+						overflow: elem.css('overflow')
 				};
-
 				elem.detach();
 				iframe.detach();
 			}
-
 			return style;
 		},
-
 		getRoot: function (elem) {
 			if (elem) {
 				if (elem.contentDocument) {
@@ -170,18 +202,17 @@
 			}
 			return elem;
 		},
-
 		match: function (element, selectorSetting) {
 			if (!element || !this.isElement(element)) {
 				return false;
 			}
-
 			if (selectorSetting.type == '#') {
 				if (element.id != selectorSetting.tag) {
 					return false;
 				}
 			} else if (selectorSetting.type == '.') {
-				if ((element.className + ' ').indexOf(selectorSetting.tag + ' ') == -1) {
+				if ((element.className + ' ')
+					.indexOf(selectorSetting.tag + ' ') == -1) {
 					return false;
 				}
 			} else {
@@ -189,26 +220,23 @@
 					return false;
 				}
 			}
-
 			if (selectorSetting.classes.length > 0) {
 				if (!jet.hasClass(element, selectorSetting.classes)) {
 					return false;
 				}
 			}
-
 			return true;
 		},
-
 		// - jet.detect(obj)
 		// Return the type of object 
 		// @param {Object} obj The object for detection.
 		// @return {String} Returns the object type.
 		// -
 		detect: function (obj) {
-			var text = objMethod.toString.call(obj).split(' ')[1];
+			var text = objMethod.toString.call(obj)
+				.split(' ')[1];
 			return (text.substring(0, text.length - 1));
 		},
-
 		// - jet.isWalkable(obj)
 		// Check to see if an object can be Iterated. 
 		// @param {Object} obj The object that will be checked to see if it can be Iterated.
@@ -217,7 +245,6 @@
 		isWalkable: function (obj) {
 			return (jCore.isCollection(obj) || jCore.isPlainObject(obj));
 		},
-
 		// - jet.isJetObject(obj)
 		// Check to see if an object is a jet object. 
 		// @param {Object} obj The object that will be checked to see if it's a jet object.
@@ -226,7 +253,6 @@
 		isJetObject: function (obj) {
 			return (jCore.isDefined(obj) && obj.constructor === jObject);
 		},
-
 		// - jet.isCollection(obj)
 		// Check to see if an object is a collection or an array. 
 		// @param {Object} obj The object that will be checked to see if it's a collection or an array.
@@ -235,7 +261,6 @@
 		isCollection: function (obj) {
 			return (jCore.isDefined(obj) && (jCore.isArray(obj) || jCore.isJetObject(obj) || (jCore.isNumeric(obj.length) && jCore.isFunction(obj.item))));
 		},
-
 		// - jet.isDefined(obj)
 		// Check to see if an object is defined. 
 		// @param {Object} obj The object that will be checked to see if it's defined.
@@ -244,7 +269,6 @@
 		isDefined: function (obj) {
 			return (typeof obj !== 'undefined');
 		},
-
 		// - jet.isElement(obj)
 		// Check to see if an object is an element object. 
 		// @param {Object} obj The object that will be checked to see if it's an element object.
@@ -253,7 +277,6 @@
 		isElement: function (obj) {
 			return (jCore.isDefined(obj) && (obj.nodeType === 1 || obj.nodeType === 11 || obj.nodeType === 9));
 		},
-
 		// - jet.isArray(obj)
 		// Check to see if an object is an array. 
 		// @param {Object} obj The object that will be checked to see if it's an array.
@@ -262,7 +285,6 @@
 		isArray: function (obj) {
 			return (this.detect(obj) === 'Array');
 		},
-
 		// - jet.isObject(obj)
 		// Check to see if an object is an object. 
 		// @param {Object} obj The object that will be checked to see if it's an object.
@@ -271,7 +293,6 @@
 		isObject: function (obj) {
 			return (this.detect(obj) === 'Object');
 		},
-
 		// - jet.isFunction(obj)
 		// Check to see if an object is a callback function. 
 		// @param {Object} obj The object that will be checked to see if it's a callback function.
@@ -280,7 +301,6 @@
 		isFunction: function (obj) {
 			return (this.detect(obj) === 'Function');
 		},
-
 		// - jet.isString(obj)
 		// Check to see if an object is a string. 
 		// @param {Object} obj The object that will be checked to see if it's a string.
@@ -289,7 +309,6 @@
 		isString: function (obj) {
 			return (this.detect(obj) === 'String');
 		},
-
 		// - jet.isNumeric(obj)
 		// Check to see if an object is a number. 
 		// @param {Object} obj The object that will be checked to see if it's a number.
@@ -298,7 +317,6 @@
 		isNumeric: function (obj) {
 			return (this.detect(obj) === 'Number');
 		},
-
 		// - jet.isPlainObject(obj)
 		// Check to see if an object is a plain object (created using "{}" or "new Object").
 		// @param {Object} obj The object that will be checked to see if it's a plain object.
@@ -313,7 +331,6 @@
 			}
 			return true;
 		},
-
 		// - jet.isDocument(obj)
 		// Check to see if an object is a document node.
 		// @param {Object} obj The object that will be checked to see if it's a document node.
@@ -322,25 +339,20 @@
 		isDocument: function (obj) {
 			return (this.isDefined(obj) && obj.nodeType === 9);
 		},
-
 		// - jet.isEmpty(obj)
 		// Check to see if an object or array is empty.
 		// @param {Object} obj The object that will be checked to see if it's empty.
 		// @return {Boolean}
 		// - 
 		isEmpty: function (obj) {
-		    if (obj == null) return true;
-
-		    if (obj.length > 0) return false;
-		    if (obj.length === 0) return true;
-
-		    for (var key in obj) {
-		        if (objMethod.hasOwnProperty.call(obj, key)) return false;
-		    }
-		
-		    return true;
+			if (obj == null) return true;
+			if (obj.length > 0) return false;
+			if (obj.length === 0) return true;
+			for (var key in obj) {
+				if (objMethod.hasOwnProperty.call(obj, key)) return false;
+			}
+			return true;
 		},
-
 		// - jet.isWindow(obj)
 		// Check to see if the object is a window object.
 		// @param {Object} obj The object that will be checked to see if a window object.
@@ -350,7 +362,6 @@
 		isWindow: function (obj) {
 			return this.isDefined(obj) && (obj.self === obj || (obj.contentWindow.self && obj.contentWindow.self === obj.contentWindow));
 		},
-
 		// - jet.each(obj, callback)
 		// Seamlessly iterate each item of an array, array-like or object.
 		// @param {Object} obj The object that will be checked to see if it's included in a specified array.
@@ -359,11 +370,9 @@
 		// - 
 		each: function (obj, callback) {
 			var index, length;
-
 			if (!this.isFunction(callback)) {
 				return this;
 			}
-
 			if (this.isCollection(obj)) {
 				index = 0;
 				for (index = 0, length = obj.length; index < length; index++) {
@@ -376,30 +385,27 @@
 			} else {
 				callback.call(obj, 0, obj);
 			}
-
 			return this;
 		},
-
 		selectorSpecialChar: function (selector) {
 			selector = selector.replace(/#(\d)/, '#\\3$1 ');
 			selector = selector.replace(/(\[\w+\s*=\s*)(\d)/i, '$1\\3$2 ');
 			return selector.replace(/#(\d)/, '#\\3$1 ');
 		},
-
 		nodeName: function (obj, compare) {
 			if (jCore.isDefined(compare)) {
 				return obj.nodeName && obj.nodeName.toLowerCase() === compare.toLowerCase();
 			}
 			return (obj.nodeName) ? obj.nodeName.toLowerCase() : '';
 		},
-
 		// - jet.inArray(obj)
 		// Check to see if an object is included in a specified array.
 		// @param {Object} obj The object that will be checked to see if it's included in a specified array.
 		// @return {Boolean}
 		// - 
 		inArray: function (ary, value) {
-			var index = 0, val;
+			var index = 0,
+				val;
 			if (jet.isCollection(ary)) {
 				while (val = ary[index++]) {
 					if (value === val) {
@@ -409,42 +415,60 @@
 			}
 			return false;
 		},
-
+		// - jet.clone(obj)
+		// Clone an object.
+		// @param {Object} obj The object that will be cloned.
+		// @return {Anything}
+		// @added 1.0.4-Beta
+		// - 
+		clone: function (obj) {
+			var clone, index, length;
+			if (!jet.isDefined(obj) || !obj) return obj;
+			if (obj instanceof Date) {} else if (jCore.isObject(obj) || obj.constructor === jObject) {
+				clone = {};
+				for (index in obj) {
+					if (obj.hasOwnProperty(index)) {
+						clone[index] = jCore.clone(obj[index]);
+					}
+				}
+				return clone;
+			} else if (jCore.isArray(obj)) {
+				clone = [];
+				for (index = 0, length = obj.length; index < length; index++) {
+					clone = jCore.clone(obj[index]);
+				}
+				return clone;
+			}
+			return obj;
+		},
 		domReady: function () {
 			var top;
-
 			// DOM Ready on post load
 			if (doc.readyState === 'complete') {
 				setTimeout(jCore.readyOnLoad);
 			} else {
 				// Setup DOM Ready Event
-	        	if (win.addEventListener) {
+				if (win.addEventListener) {
 					doc.addEventListener('DOMContentLoaded', function () {
 						jCore.readyOnLoad();
 					}, false);
 				} else {
 					top = null;
-					
 					try {
 						top = win.frameElement === null && doc.documentElement;
-					} catch(e) {
-						
-					}
-	
+					} catch (e) {}
 					if (top && top.doScroll) {
 						(function poll() {
 							if (jCore.onLoadEvent.length) {
 								try {
 									top.doScroll('left');
-								} catch(e) {
+								} catch (e) {
 									return setTimeout(poll, 50);
 								}
-	
 								jCore.readyOnLoad();
 							}
 						})();
 					}
-	
 					doc.onreadystatechange = function () {
 						if (doc.readyState === 'complete') {
 							doc.onreadystatechange = null;
@@ -452,7 +476,6 @@
 						}
 					};
 				}
-	
 				win.onload = function () {
 					jCore.readyOnLoad();
 					win.onload = null;
@@ -460,57 +483,45 @@
 			}
 		}
 	};
-
 	// Jet Event Handler
-	jEvent = function () {
-		this.events = {};
-	};
-
-	jCore.extend(jEvent.prototype, {
-		events: {},
-		element: null,
-
-		add: function (event, callback) {
-			if (!event) {
-				event = '_jEventBase';
-			}
-
-			this.events[event] = callback;
-			return this;
-		},
-
-		remove: function (event) {
-			if (!event) {
-				event = '_jEventBase';
-			}
-
-			delete this.events[event];
-			return this;
-		},
-
-		clear: function () {
-			var index;
-			for (index in this.events) {
-				delete this.events[index];
-			}
-
-			return this;
-		},
-
-		getHandler: function () {
-			var events = this.events, element = this.element;
-			return function (e) {
-				var index;
-				// Fixed below IE8
-				e = e || win.event;
-
-				for (index in events) {
-					events[index].call(element, e);
+	function jEvent(element) {
+		var events = {},
+			self = {
+				element: null,
+				add: function (event, callback) {
+					if (!event) {
+						event = '_jEventBase';
+					}
+					events[event] = callback;
+					return self;
+				},
+				remove: function (event) {
+					if (!event) {
+						event = '_jEventBase';
+					}
+					delete events[event];
+					return self;
+				},
+				clear: function () {
+					var index;
+					for (index in events) {
+						delete events[index];
+					}
+					return self;
+				},
+				getHandler: function () {
+					return function (e) {
+						var index;
+						// Fixed below IE8
+						e = e || win.event;
+						for (index in events) {
+							events[index].call(element, e);
+						}
+					};
 				}
 			};
-		}
-	});
-
+		return self;
+	}
 	// Clone Function
 	jCore.each(['detect', 'isDefined', 'isElement', 'isArray', 'isObject', 'isFunction', 'isString', 'isEmpty', 'isNumeric', 'isPlainObject', 'inArray', 'isCollection', 'isWalkable', 'isDocument', 'isWindow', 'each'], function () {
 		jet[this] = jCore[this];
@@ -522,11 +533,10 @@
 			return jet[name].call(this, elem, value, args);
 		};
 	}
-
 	// Extend jet class, static function
 	jCore.extend(jet, {
 		// @added 1.0.2-Beta
-		version: '1.0.3-Beta',
+		version: '1.0.4-Beta',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
@@ -536,7 +546,6 @@
 			win.jet = null;
 			return _jet;
 		},
-
 		// - jet.extend(obj)
 		// Merge the contents of the object into jet control prototype.
 		// @param {Object} obj The object that will be merged into jet control.
@@ -546,7 +555,6 @@
 			jCore.extend(jet, obj, true);
 			return this;
 		},
-
 		// - jet.extendObject(objA, objB, inherit)
 		// Merge the contents of the object specified into the first object.
 		// @param {Object} objA The object that would be extended.
@@ -558,7 +566,6 @@
 			jCore.extend(objA, objB, inherit);
 			return this;
 		},
-
 		// - jet.install(obj, isFullSet)
 		// Install a mirroring plugin to jet.
 		// @param {PlainObject} obj The object that is a set of plugin to install.
@@ -567,7 +574,6 @@
 		// - 
 		install: function (obj, isFullSet) {
 			var name, func, alias;
-
 			for (name in obj) {
 				if (jet.isPlainObject(obj[name]) && jet.isString(obj[name].alias)) {
 					func = obj[name].callback;
@@ -576,12 +582,10 @@
 					func = obj[name];
 					alias = name;
 				}
-
 				if (jet.isFunction(func)) {
 					if (!jet.isDefined(jet[name])) {
 						jet[name] = func;
 					}
-
 					if (!jet.isDefined(jObject.prototype[alias])) {
 						jObject.prototype[alias] = adapter(name, isFullSet);
 					}
@@ -589,7 +593,6 @@
 			}
 			return this;
 		},
-
 		// - jet.ready(callback)
 		// Add the callback function to queue and execute when the DOM is fully loaded. Equivalent as jet(callback).
 		// @param {Function} callback The object that is a set of plugin to install.
@@ -609,7 +612,6 @@
 			}
 			return this;
 		},
-
 		// - jet.trim(text)
 		// Strip whitespace from the beginning and end of a string
 		// @param {String} text The string that for whitespace stripping.
@@ -618,7 +620,6 @@
 		trim: function (text) {
 			return text.replace(/^\s+|\s+$/g, '');
 		},
-
 		// - jet.childAt(obj, type)
 		// Check to see the element is the first or the last node in current node set. Equivalent as jet.is(obj, ':first-child') or jet.is(obj, ':last-child').
 		// @param {Object} obj The object that will be checked to see if it's the first or the last node in current node set.
@@ -628,9 +629,7 @@
 		childAt: function (obj, type) {
 			var direction = (type === 'first') ? 'next' : 'previous',
 				child;
-				
 			if (!obj || !jet.isElement(obj)) return null;
-
 			if (obj[type + 'ElementChild']) {
 				return obj[type + 'ElementChild'];
 			} else {
@@ -639,7 +638,6 @@
 				return jet.sibling(child, direction);
 			}
 		},
-
 		// - jet.shift(html)
 		// Convert the string into jet object.
 		// @param {String} html The string that will be converted to a set of elements.
@@ -647,15 +645,12 @@
 		// - 
 		shift: function (html) {
 			var jObj, elements;
-
 			container.innerHTML = html;
 			elements = container.getElementsByTagName('*');
 			jObj = jet(elements);
 			container.innerHTML = '';
-
 			return jObj;
 		},
-
 		// - jet.comparePosition(a, b)
 		// Convert the string into jet object.
 		// @param {DOMElement} a The dom element that for compare.
@@ -663,17 +658,8 @@
 		// @return {Number}
 		// - 
 		comparePosition: function (a, b) {
-			return a.compareDocumentPosition ?
-						a.compareDocumentPosition(b) :
-							a.contains ?
-							(a != b && a.contains(b) && 16) +
-							(a != b && b.contains(a) && 8) +
-							(a.sourceIndex >= 0 && b.sourceIndex >= 0 ?
-								(a.sourceIndex < b.sourceIndex && 4 ) + (a.sourceIndex > b.sourceIndex && 2) :
-									1) :
-										0;
+			return a.compareDocumentPosition ? a.compareDocumentPosition(b) : a.contains ? (a != b && a.contains(b) && 16) + (a != b && b.contains(a) && 8) + (a.sourceIndex >= 0 && b.sourceIndex >= 0 ? (a.sourceIndex < b.sourceIndex && 4) + (a.sourceIndex > b.sourceIndex && 2) : 1) : 0;
 		},
-
 		// - jet.capitalise(text)
 		// Capital the first letter of a string.
 		// @param {String} text The string for capital the first letter.
@@ -683,9 +669,9 @@
 			if (!jet.isString(text)) {
 				return '';
 			}
-		    return text.charAt(0).toUpperCase() + text.slice(1);
+			return text.charAt(0)
+				.toUpperCase() + text.slice(1);
 		},
-
 		// - jet.camelCase(text)
 		// Convert from Underscore text or Hyphen text to Camel Case one.
 		// @param {String} text The string that will be converted from Underscore text or Hyphen text to Camel Case one.
@@ -696,48 +682,45 @@
 				return match.toUpperCase();
 			});
 		},
-
 		// - jet.ajax(obj)
 		// Perform an Asynchronous JavaScript and XML (Ajax) request and apply the JSON or XML object into specified callback function.
 		// @param {PlainObject} obj A set of setting for perform an Ajax request.
 		// @item obj:{String} url The target url for Ajax request.
 		// @item obj:{Number} timeout Setup a timeout option for request. Value in millisecond.
 		// @item obj:{String} method The request method in POST or GET.
-		// @item obj:{Function} success The callback function that will be executed when the request is completed.
-		// @item obj:{Function} error The callback function that will be executed if the request returns error or timeout.
 		// @item obj:{PlainObject} headers The plain object with headers that will be set for request.
 		// @item obj:{PlainObject} data The plain object with POST data that will be sent.
 		// @item obj:{String} dataType The string of data type in 'json' or 'xml'
 		// @return {jet}
 		// - 
 		ajax: function (obj) {
-			var objExt = {}, data = {}, parser;
-
+			var objExt = {},
+				data = {},
+				parser;
 			jCore.extend(objExt, obj);
 
-			if (jet.isFunction(obj.success)) {
-				objExt.success = function () {
-					if (obj.dataType === 'xml') {
-						if (win.dOMParser) {
-							parser = new DOMParser();
-							data = parser.parseFromString(this, 'text/xml');
-						} else {
-							data = new ActiveXObject('Microsoft.xMLDOM');
-							data.async = false;
-							data.loadXML(this); 
-						}
+			if (obj.dataType === 'xml') {
+				parser = function () {
+					var p;
+					if (win.DOMParser) {
+						p = new DOMParser();
+						return p.parseFromString(this, 'text/xml');
 					} else {
-						data = eval('(' + this + ')');
+						p = new ActiveXObject('Microsoft.XMLDOM');
+						p.async = false;
+						p.loadXML(this);
+						return p;
 					}
-					obj.success.call(data);
+				};
+			} else {
+				parser = function () {
+					return eval('(' + this + ')');
 				};
 			}
+			objExt.parser = parser;
 
-			jet.request(objExt, objExt);
-
-			return this;
+			return jet.request(objExt);
 		},
-
 		// - jet.request(obj)
 		// Perform a web request with get / post method.
 		// @param {PlainObject} obj A set of setting for perform an Ajax request.
@@ -751,59 +734,56 @@
 		// @return {jet}
 		// - 
 		request: function (obj) {
-			var xmlHttp = null, dataString = '', index;
-
-			if (jet.isPlainObject(obj) && obj.url.length > 0) {
-				xmlHttp = new XMLHttpRequest();
-
-				if (parseInt(obj.timeout) > 0) {
-					xmlHttp.timeoutTimer = setTimeout(function() {
-						xmlHttp.abort('timeout');
-					}, parseInt(obj.timeout));
-				}
-
-				xmlHttp.onreadystatechange = function () {
-					if (xmlHttp.readyState != 4) return;
-
-				    if (xmlHttp.status == 200) {
-				    	clearTimeout(xmlHttp.timeoutTimer);
-						if (jet.isFunction(obj.success)) {
-							obj.success.call(xmlHttp.responseText);
-						}
-				    } else {
-						if (jet.isFunction(obj.error)) {
-							obj.error.apply(xmlHttp.statusText, [xmlHttp.status, xmlHttp.statusText]);
-						}
-				    }
-				};
-
-				if (obj.method == 'post') {
-					xmlHttp.open('POST', obj.url, true);
-
-					if (jet.isPlainObject(obj.headers)) {
-						for (index in obj.headers) {
-							xmlHttp.setRequestHeader(index, obj.headers[index]);
-						}
+			var that = this, d = jet.Deferred();
+			(function (deferred) {
+				var xmlHttp = null,
+					dataString = '',
+					index;
+				if (jet.isPlainObject(obj) && obj.url.length > 0) {
+					xmlHttp = new XMLHttpRequest();
+					if (parseInt(obj.timeout) > 0) {
+						xmlHttp.timeoutTimer = setTimeout(function () {
+							xmlHttp.abort('timeout');
+						}, parseInt(obj.timeout));
 					}
-
-					if (jet.isDefined(obj.data)) {
-						xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-						if (jet.isPlainObject(obj.data)) {
-							for (index in obj.data) {
-								dataString += (dataString.length) ? '&' + index + '=' + obj.data[index] : index + '=' + obj.data[index];
-							}
-							xmlHttp.send(dataString);
+					xmlHttp.onreadystatechange = function () {
+						if (xmlHttp.readyState != 4) return;
+						if (xmlHttp.status == 200) {
+							deferred.resolve((jCore.isFunction(obj.parser) ? obj.parser.call(xmlHttp.responseText) : xmlHttp.responseText));
 						} else {
-							xmlHttp.send(obj.data);
+							deferred.reject({
+								status: xmlHttp.status,
+								text: xmlHttp.statusText
+							});
 						}
+					};
+					if (obj.method === 'post') {
+						xmlHttp.open('POST', obj.url, true);
+						if (jet.isPlainObject(obj.headers)) {
+							for (index in obj.headers) {
+								xmlHttp.setRequestHeader(index, obj.headers[index]);
+							}
+						}
+						if (jet.isDefined(obj.data)) {
+							xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+							if (jet.isPlainObject(obj.data)) {
+								for (index in obj.data) {
+									dataString += (dataString.length) ? '&' + index + '=' + obj.data[index] : index + '=' + obj.data[index];
+								}
+								xmlHttp.send(dataString);
+							} else {
+								xmlHttp.send(obj.data);
+							}
+						}
+					} else {
+						xmlHttp.open('GET', obj.url, true);
+						xmlHttp.send();
 					}
-				} else {
-					xmlHttp.open('GET', obj.url, true);
-					xmlHttp.send();
 				}
-			}
+				return deferred.detach();
+			})(d);
+			return d;
 		},
-
 		// - jet.registerCSSHook(name, callback)
 		// Register a Hook for jet.css()
 		// @param {String} name The name of style property that will be executed by user-defined callback function.
@@ -816,7 +796,6 @@
 			}
 			return this;
 		},
-
 		// - jet.registerValueHook(name, callback)
 		// Register a Hook for jet.value()
 		// @param {String} name The name of object type or name that will be executed by user-defined callback function.
@@ -829,7 +808,6 @@
 			}
 			return this;
 		},
-
 		// - jet.registerPropHook(name, callback)
 		// Register a Hook for jet.prop()
 		// @param {String} name The name of property that will be executed by user-defined callback function.
@@ -842,7 +820,6 @@
 			}
 			return this;
 		},
-
 		// - jet.registerUnitHook(name, obj)
 		// Register a Hook for jUnit calculation
 		// @param {String} name The name of property that will be executed by user-defined callback function.
@@ -851,8 +828,8 @@
 		// @param {String} obj.calculateDiff.value A specified value that to calculate the difference with original value.
 		// @item obj:{Function} Take(percentage) Returns the original value plus the difference in percentage provided.
 		// @param {Number} obj.take.percentage A number of percentage, between 0 to 1 (0% to 100%).
-		// @item obj:{Function} SetBase(value) The callback function that for setup and calculate the original value.
-		// @param {String} obj.setBase.value A string of the original value.
+		// @item obj:{Function} init(value) The callback function that for setup and calculate the original value.
+		// @param {String} obj.init.value A string of the original value.
 		// @return {jet}
 		// - 
 		registerUnitHook: function (name, obj) {
@@ -861,7 +838,6 @@
 			}
 			return this;
 		},
-
 		// - jet.walk(obj, callback)
 		// Execute the user-defined callback function to each item of the array, array-like object, plain object or object.
 		// @param {Object} obj The array, array-like object, plain object or object that will be iterated.
@@ -870,7 +846,6 @@
 		// - 
 		walk: function (obj, callback) {
 			var result = [];
-
 			if ((jet.isArray(obj) || jet.isPlainObject(obj)) && jet.isFunction(callback)) {
 				jet.each(obj, function (i, object) {
 					var value = callback.call(object, i, object);
@@ -881,18 +856,16 @@
 					}
 				});
 			}
-
 			return result;
 		},
-
 		// - jet.buildQueryString(obj)
 		// Generates a URL-encoded query string from the array or plain object provided.
 		// @param {Object} obj The array or plain object that will be converted to a URL-encoded query. If the object is an array, each item should included 'name' and 'value' properties.
 		// @return {String}
 		// - 
 		buildQueryString: function (obj) {
-			var queryString = [], value;
-
+			var queryString = [],
+				value;
 			if (jet.isArray(obj)) {
 				jet.each(obj, function () {
 					if (jet.isDefined(this.name) && jet.isDefined(this.value)) {
@@ -907,45 +880,26 @@
 				});
 			}
 			return queryString.join('&');
-		},
-
-		// - jet.parseDate(value)
-		// Parse the datetime from datetime object of string. Return jDateTime.
-		// @param {String} value The string that will be parsed to jDateTime.
-		// @param {DateTime} value The DateTime object that will be parsed to jDateTime.
-		// @param {Number} value The number that will be parsed to jDateTime.
-		// @return {jDateTime}
-		// @added 1.0.3-Beta
-		// - 
-		parseDate: function (value) {
-			return (new jDateTime()).parseDate(value);
 		}
 	});
-
-	jObject = function () {
-		
-	};
-
+	jObject = function jObject() {};
 	jObject.prototype = new Array;
-
 	// Extend jObject class, Non-static function
 	jCore.extend(jObject.prototype, {
 		constructor: jObject,
 		animate: null,
-
 		// - .merge(obj)
 		// Merge a set of elements into current set of matched elements that not be added or duplicate.
 		// @param {Object} obj The array or array-like object that will be merged.
 		// @return {jObject}
 		// - 
 		merge: function (obj) {
-			var index = 0, elem;
-
+			var index = 0,
+				elem;
 			if (jet.isCollection(obj)) {
 				while (elem = this[index++]) {
 					elem.added = true;
 				}
-	
 				index = 0;
 				while (elem = obj[index++]) {
 					if (jet.isElement(elem)) {
@@ -956,10 +910,8 @@
 					}
 				}
 			}
-
 			return this;
 		},
-
 		// - .add(element)
 		// Add an element into current set of matched elements that not be added or duplicate.
 		// @param {DOMElement} element The element that will be added.
@@ -974,18 +926,17 @@
 			}
 			return this;
 		},
-
 		// - .finalize()
 		// Reset each of the set of matched elements 'added' frag.
 		// @return {jObject}
 		// - 
 		finalize: function () {
-			var index = 0, elem;
+			var index = 0,
+				elem;
 			while ((elem = this[index++])) {
 				elem.added = false;
 			}
 		},
-
 		// - .each(callback)
 		// Iterate over a jet object, executing a function for each matched element.
 		// @param {Function} callback The callback function that to be executed.
@@ -995,7 +946,6 @@
 			jet.each(this, callback);
 			return this;
 		},
-
 		// - .find(selector)
 		// Get the descendants of each element in the current set of matched elements, filtered by a selector, jet object, array, array-like object, or element.
 		// @param {String} selector The string of selector.
@@ -1005,14 +955,11 @@
 		// - 
 		find: function (selector) {
 			var jObj;
-
 			if (jet.isElement(selector)) {
 				selector = [selector];
 			}
-
 			if (jet.isCollection(selector)) {
 				jObj = jet();
-
 				jet.each(this, function (i, a) {
 					jet.each(selector, function (i, b) {
 						if (jet.comparePosition(a, b) === 20) {
@@ -1023,9 +970,8 @@
 				jObj.finalize();
 				return jObj;
 			}
-			return jEngine.get(selector, this);
+			return launchJet(selector, this);
 		},
-
 		// Action
 		// - .hide(duration, callback)
 		// Hide the matched elements.
@@ -1040,7 +986,6 @@
 					duration = parseInt(duration);
 					if (duration > 0) {
 						elem._cssStorage = {};
-	
 						elem._cssStorage.display = jet.css(elem, 'display');
 						elem._cssStorage.overflow = jet.css(elem, 'overflow');
 						jet.each(['width', 'height', 'padding', 'margin', 'opacity'], function () {
@@ -1050,32 +995,29 @@
 								animateObj[this] = '0';
 							}
 						});
-
 						jet.css(elem, 'display', 'block');
 						jet.css(elem, 'overflow', 'hidden');
 						if (animateObj) {
-							jet(elem).animate(animateObj, duration, 'onswing', {
-								complete: function () {
-									jet.css(elem, 'display', 'none');
-									if (jet.isFunction(callback)) {
-										callback.call(elem);
+							jet(elem)
+								.animate(animateObj, duration, 'onswing', {
+									complete: function () {
+										jet.css(elem, 'display', 'none');
+										if (jet.isFunction(callback)) {
+											callback.call(elem);
+										}
 									}
-								}
-							});
+								});
 						}
 					} else {
 						jet.css(elem, 'display', 'none');
-		
 						if (jet.isFunction(callback)) {
 							callback.call(elem);
 						}
 					}
 				}
 			});
-
 			return this;
 		},
-
 		// - .show(duration, callback)
 		// Show the matched elements.
 		// @param {Number} duration The number of duration in millisecond.
@@ -1084,8 +1026,8 @@
 		// - 
 		show: function (duration, callback) {
 			jet.each(this, function (i, elem) {
-				var animateObj = {}, style;
-
+				var animateObj = {},
+					style;
 				if (jet.css(elem, 'display') === 'none') {
 					duration = parseInt(duration);
 					if (duration > 0) {
@@ -1096,7 +1038,6 @@
 									animateObj[this] = elem._cssStorage[this];
 								}
 							});
-		
 							jet.css(elem, 'display', elem._cssStorage.display);
 							jet.css(elem, 'overflow', elem._cssStorage.overflow);
 							elem._cssStorage = null;
@@ -1109,33 +1050,29 @@
 								opacity: 1
 							};
 						}
-		
 						if (animateObj) {
-							jet(elem).animate(animateObj, duration, 'onswing', {
-								complete: function () {
-									if (jet.css(elem, 'opacity') === '1') {
-										jet.css(elem, 'opacity', null);
+							jet(elem)
+								.animate(animateObj, duration, 'onswing', {
+									complete: function () {
+										if (jet.css(elem, 'opacity') === '1') {
+											jet.css(elem, 'opacity', null);
+										}
+										if (jet.isFunction(callback)) {
+											callback.call(elem);
+										}
 									}
-
-									if (jet.isFunction(callback)) {
-										callback.call(elem);
-									}
-								}
-							});
+								});
 						}
 					} else {
 						jet.css(obj, 'display', 'block');
-		
 						if (jet.isFunction(callback)) {
 							callback.call(this);
 						}
 					}
 				}
 			});
-
 			return this;
 		},
-
 		// - .prev()
 		// Retuens the previous sibling element from the first element of the set of matched elements.
 		// @return {jObject}
@@ -1144,7 +1081,6 @@
 			var obj = this[0];
 			return jet(jet.sibling(obj, 'previous'));
 		},
-
 		// - .next()
 		// Retuens the previous sibling element from the first element of the set of matched elements.
 		// @return {jObject}
@@ -1153,7 +1089,6 @@
 			var obj = this[0];
 			return jet(jet.sibling(obj, 'next'));
 		},
-
 		// - .get(start[, length])
 		// Returns the specified element or a number of elements with jet object.
 		// @param {Number} start The returned element will start at the specified index in the set of matched elements.
@@ -1164,18 +1099,15 @@
 			start = parseInt(start);
 			length = parseInt(length);
 			length = (this.length <= start + length) ? this.length : start + length;
-
 			if (start == 'NaN' || !this[start]) {
 				return jObj;
 			}
-
 			if (length - start > 1) {
 				return jet(this.slice(start, length));
 			} else {
 				return jet(this[start]);
 			}
 		},
-
 		// - .filter(callback)
 		// Reduce the set of matched elements to those that match the selector or pass the function’s test.
 		// @param {Function} callback The callback function that used of filter, return true to keep the element.
@@ -1183,16 +1115,13 @@
 		// - 
 		filter: function (callback) {
 			var filtered = [];
-
 			jet.each(this, function () {
 				if (callback.call(this)) {
 					filtered.push(this);
 				}
 			});
-
 			return jet(filtered);
 		},
-
 		// - .walk(callback)
 		// Execute the user-defined callback function to each element of the set of matched elements.
 		// @param {Function} callback The callback function thet will be executed.
@@ -1201,7 +1130,6 @@
 		walk: function (callback) {
 			return jet.walk(this, callback);
 		},
-
 		// Event
 		// - .on(event[, callback])
 		// Apply or trigger event to each of the set of matched elements.
@@ -1219,10 +1147,8 @@
 			} else {
 				jet.trigger(this, event);
 			}
-
 			return this;
 		},
-
 		// - .click(callback)
 		// Apply or trigger OnClick event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1231,7 +1157,6 @@
 		click: function (callback) {
 			return this.on('click', callback);
 		},
-
 		// - .dblClick(callback)
 		// Apply or trigger OnDblClick event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1240,7 +1165,6 @@
 		dblClick: function (callback) {
 			return this.on('dblclick', callback);
 		},
-
 		// - .focus(callback)
 		// Apply or trigger OnFocus event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1249,7 +1173,6 @@
 		focus: function (callback) {
 			return this.on('focus', callback);
 		},
-
 		// - .blur(callback)
 		// Apply or trigger OnBlur event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1258,7 +1181,6 @@
 		blur: function (callback) {
 			return this.on('blur', callback);
 		},
-
 		// - .change(callback)
 		// Apply or trigger OnChange event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1267,7 +1189,6 @@
 		change: function (callback) {
 			return this.on('change', callback);
 		},
-
 		// - .select(callback)
 		// Apply or trigger OnSelect event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1276,7 +1197,6 @@
 		select: function (callback) {
 			return this.on('select', callback);
 		},
-
 		// - .mouseOver(callback)
 		// Apply or trigger OnMouseOver event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1285,7 +1205,6 @@
 		mouseOver: function (callback) {
 			return this.on('mouseover', callback);
 		},
-
 		// - .mouseOut(callback)
 		// Apply or trigger OnMouseOut event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1294,7 +1213,6 @@
 		mouseOut: function (callback) {
 			return this.on('mouseout', callback);
 		},
-
 		// - .ready(callback)
 		// Apply or trigger OnLoad event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1303,7 +1221,6 @@
 		ready: function (callback) {
 			return this.on('load', callback);
 		},
-
 		// - .unload(callback)
 		// Apply or trigger Unload event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1312,7 +1229,6 @@
 		unload: function (callback) {
 			return this.on('unload', callback);
 		},
-
 		// - .submit(callback)
 		// Apply or trigger OnSubmit event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1321,7 +1237,6 @@
 		submit: function (callback) {
 			return this.on('submit', callback);
 		},
-
 		// - .mouseDown(callback)
 		// Apply or trigger OnMouseDown event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1331,7 +1246,6 @@
 		mouseDown: function (callback) {
 			return this.on('mousedown', callback);
 		},
-
 		// - .mouseUp(callback)
 		// Apply or trigger OnMouseUp event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1341,7 +1255,6 @@
 		mouseUp: function (callback) {
 			return this.on('mouseup', callback);
 		},
-
 		// - .mouseMove(callback)
 		// Apply or trigger OnMouseMove event to each of the set of matched elements.
 		// @param {Function} callback The callback function thet will be applied.
@@ -1351,7 +1264,6 @@
 		mouseMove: function (callback) {
 			return this.on('mousemove', callback);
 		},
-
 		// - .dragDrop(params, selector)
 		// Apply Drag n Drop to each of the set of matched elements.
 		// @param {PlainObject} params The setting for drag n drop event.
@@ -1362,78 +1274,76 @@
 		// @return {jObject}
 		// @added 1.0.2-Beta
 		// - 
-		dragDrop: function(params, selector) {
+		dragDrop: function (params, selector) {
 			jet.each(this, function (i, elem) {
 				var elMove = elem;
-
 				if (jet.isElement(elem)) {
-					if (jet.isDefined(selector)){
+					if (jet.isDefined(selector)) {
 						elMove = jet.parents(elem, selector)[0];
 						if (elMove.nodeType !== 1) {
 							elMove = elem;
 						}
 					}
-
-					jet(elem).attr('draggable', true);
-
+					jet(elem)
+						.attr('draggable', true);
 					// Display href onclick event
-					jet(elem).click(function () {
-						return false;
-					});
-
-					jet(elem).bindEvent('dragstart', function (e) {
-						var point = {
-							x: (e.clientX) - jet.offset(elem).left,
-							y: (e.clientY) - jet.offset(elem).top
-						}, func = function (e) {
-							jet.css(elMove, {
-								top: (e.clientY - point.y) + 'px', left: (e.clientX - point.x) + 'px'
-							});
-						};
-
-						jet.css(elMove, 'position', 'absolute');
-
-						// IE8 and below, stop propagation and cancel action
-						if (e.stopPropagation) {
-							e.stopPropagation();
-						}
-						e.cancelBubble = true;
-						e.returnValue = false;
-
-						if (e.preventDefault) {
-							e.preventDefault();
-						}
-
-						if (jet.isDefined(params) && params.drag) {
-							params.drag.call(elem, e);
-						}
-
-						jet(doc).mouseMove(function (e) {
-							if (jet.isDefined(params) && params.move) {
-								params.move.call(elMove, e, func);
-							} else {
-								func.call(elMove, e);
-							}
+					jet(elem)
+						.click(function () {
+							return false;
 						});
-
-						jet(doc).mouseUp(function (e) {
+					jet(elem)
+						.bindEvent('dragstart', function (e) {
+							var point = {
+								x: (e.clientX) - jet.offset(elem)
+									.left,
+								y: (e.clientY) - jet.offset(elem)
+									.top
+							},
+								func = function (e) {
+									jet.css(elMove, {
+										top: (e.clientY - point.y) + 'px',
+										left: (e.clientX - point.x) + 'px'
+									});
+								};
+							jet.css(elMove, 'position', 'absolute');
+							// IE8 and below, stop propagation and cancel action
+							if (e.stopPropagation) {
+								e.stopPropagation();
+							}
+							e.cancelBubble = true;
+							e.returnValue = false;
 							if (e.preventDefault) {
 								e.preventDefault();
 							}
-
-							if (jet.isDefined(params) && params.drop) {
-								params.drop.call(elem, e, elMove);
+							if (jet.isDefined(params) && params.drag) {
+								params.drag.call(elem, e);
 							}
-
-							jet(doc).unbindEvent('mousemove');
-							jet(doc).unbindEvent('mouseup');
+							jet(doc)
+								.mouseMove(function (e) {
+									if (jet.isDefined(params) && params.move) {
+										params.move.call(elMove, e, func);
+									} else {
+										func.call(elMove, e);
+									}
+								});
+							jet(doc)
+								.mouseUp(function (e) {
+									if (e.preventDefault) {
+										e.preventDefault();
+									}
+									if (jet.isDefined(params) && params.drop) {
+										params.drop.call(elem, e, elMove);
+									}
+									jet(doc)
+										.unbindEvent('mousemove');
+									jet(doc)
+										.unbindEvent('mouseup');
+								});
 						});
-					});
 				}
 			});
 			return this;
 		},
-
 		// Animate
 		// - .animate(callback[, duration, easing, callback])
 		// Perform a custom animation of a set of CSS properties.
@@ -1451,22 +1361,13 @@
 			if (!jet.isPlainObject(cssObj) || !jet.isElement(element)) {
 				return this;
 			}
-
-			if (duration < jAnimate.getPitch()) {
-				duration = jAnimate.getPitch();
-			}
-
 			if (!element.jAnimate) {
-				element.jAnimate = new jAnimate();
-				element.jAnimate.init(element);
+				element.jAnimate = jAnimate(element);
 			}
-
 			element.jAnimate.apply(cssObj, duration, easing, callback);
 			element.jAnimate.play();
-
 			return this;
 		},
-
 		// - .wait(callback)
 		// Wait a specified period of time for next animation
 		// @param {Number} duration The number of duration, in millisecond.
@@ -1479,23 +1380,18 @@
 			if (duration <= 0 || !jet.isElement(element)) {
 				return this;
 			}
-
 			if (!element.jAnimate) {
-				element.jAnimate = new jAnimate();
-				element.jAnimate.init(element);
+				element.jAnimate = jAnimate(element);
 			}
-
 			element.jAnimate.wait(duration, callback);
 			element.jAnimate.play();
-
 			return this;
 		}
 	});
-
 	// Append and Preppend function
+
 	function insertTo(obj, element, type) {
 		var contents, length = (obj.length) ? obj.length - 1 : 0;
-
 		if (element && jet.isCollection(element) && element.length > 0) {
 			contents = element;
 		} else if (jet.isString(element)) {
@@ -1503,12 +1399,10 @@
 		} else if (jet.isElement(element)) {
 			contents = [element];
 		}
-
 		if (contents) {
 			jet.each(obj, function (i, target) {
 				if (jet.isElement(target)) {
 					target = jCore.getRoot(target);
-
 					jet.each(contents, function (j, elem) {
 						var last = (length === i) ? true : false;
 						if (type === 'Append') {
@@ -1520,10 +1414,8 @@
 				}
 			});
 		}
-
 		return this;
 	}
-
 	// Install Mirroring Plugin (Full Set Element)
 	jet.install({
 		// - .append(element) mirroring jet.append(@obj, element)
@@ -1534,10 +1426,8 @@
 		// - 
 		append: function (obj, element) {
 			insertTo(obj, element, 'Append');
-
 			return this;
 		},
-
 		// - .prepend(element) mirroring jet.prepend(@obj, element)
 		// Insert content to the beginning of each element in the set of matched elements.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1546,10 +1436,8 @@
 		// - 
 		prepend: function (obj, element) {
 			insertTo(obj, element, 'Prepend');
-
 			return this;
 		},
-
 		// - .appendTo(element) mirroring jet.appendTo(@obj, element)
 		// Insert every element in the set of matched elements to the end of the target.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1558,10 +1446,8 @@
 		// - 
 		appendTo: function (obj, element) {
 			jet.append(element, obj);
-
 			return this;
 		},
-
 		// - .prependTo(element) mirroring jet.prependTo(@obj, element)
 		// Insert every element in the set of matched elements to the beginning of the target.
 		// @param {Object} obj The set of elements, it can be array, array-like object or a specified DOM element.
@@ -1570,10 +1456,8 @@
 		// - 
 		prependTo: function (obj, element) {
 			jet.prepend(element, obj);
-
 			return this;
 		},
-
 		// - .prop(prop[, value]) mirroring jet.prop(@obj, prop[, value])
 		// Get the value of a property for the first element in the set of matched elements or set one or more properties for every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1585,8 +1469,8 @@
 		// @return {jObject|String|Boolean|PlainObject}
 		// - 
 		prop: function (obj, prop, value) {
-			var returns = {}, elem;
-
+			var returns = {},
+				elem;
 			if (jet.isPlainObject(prop)) {
 				jet.each(prop, function (pp, val) {
 					jet.prop(obj, pp, val);
@@ -1603,13 +1487,11 @@
 				if (jet.isDefined(value)) {
 					jet.each(obj, function () {
 						var setValue;
-
 						if (jet.isFunction(value)) {
 							setValue = value.call(this, this[propBinding[prop] || prop]);
 						} else {
 							setValue = value;
 						}
-	
 						if (setValue !== null && jet.isDefined(this[propBinding[prop] || prop])) {
 							this[propBinding[prop] || prop] = setValue;
 						}
@@ -1624,7 +1506,6 @@
 			}
 			return this;
 		},
-
 		// - .removeProp(prop) mirroring jet.removeProp(@obj, prop)
 		// Remove the property for every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1640,7 +1521,6 @@
 			});
 			return this;
 		},
-
 		// - .css(prop[, value]) mirroring jet.css(@obj, prop[, value])
 		// Get the value of a style for the first element in the set of matched elements or set one or more styles for every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1653,7 +1533,6 @@
 		// - 
 		css: function (obj, prop, value) {
 			var elem, ccProp, returns = {};
-
 			if (jet.isPlainObject(prop)) {
 				jet.each(prop, function (style, val) {
 					jet.css(obj, style, val);
@@ -1671,7 +1550,6 @@
 				if (jCSSHooks[ccProp]) {
 					return jCSSHooks[ccProp](obj, ccProp, value);
 				}
-
 				if (jet.isDefined(value)) {
 					obj = (jet.isElement(obj)) ? [obj] : obj;
 					jet.each(obj, function () {
@@ -1689,7 +1567,8 @@
 					elem = obj[0] || obj;
 					if (jet.isElement(elem)) {
 						if (doc.defaultView && doc.defaultView.getComputedStyle) {
-							return doc.defaultView.getComputedStyle(elem, '').getPropertyValue(prop);
+							return doc.defaultView.getComputedStyle(elem, '')
+								.getPropertyValue(prop);
 						}
 						if (elem.currentStyle) {
 							return elem.currentStyle[ccProp];
@@ -1701,7 +1580,6 @@
 			}
 			return this;
 		},
-
 		// - .toggleClass(prop) mirroring jet.toggleClass(@obj, prop)
 		// Add or remove one or more classes from each element in the set of matched elements, depending on either the class’s presence or the value of the switch argument.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1710,13 +1588,12 @@
 		// - 
 		toggleClass: function (obj, prop) {
 			var classList = [];
-
 			jet.each(obj, function (i, elem) {
 				if (jet.isElement(elem)) {
 					if (jet.isString(prop)) {
-						classList = jet.trim(prop).split(' ');
+						classList = jet.trim(prop)
+							.split(' ');
 					}
-	
 					jet.each(classList, function () {
 						if (!jet.hasClass(elem, this)) {
 							jet.addClass(elem, this);
@@ -1724,7 +1601,6 @@
 							jet.removeClass(elem, this);
 						}
 					});
-
 					if (!elem.className) {
 						elem.removeAttribute('class');
 					}
@@ -1732,7 +1608,6 @@
 			});
 			return this;
 		},
-
 		// - .addClass(prop) mirroring jet.addClass(@obj, prop)
 		// Add one or more classes from each element in the set of matched elements.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1741,16 +1616,15 @@
 		// - 
 		addClass: function (obj, prop) {
 			var classList = [];
-
 			jet.each(obj, function (i, elem) {
 				var elemClass = [];
 				if (jet.isElement(elem)) {
 					if (jet.isString(prop)) {
-						classList = jet.trim(prop).split(' ');
+						classList = jet.trim(prop)
+							.split(' ');
 					} else if (jet.isArray(prop)) {
 						classList = prop;
 					}
-
 					jet.each(classList, function () {
 						if (!jet.hasClass(elem, this)) {
 							elem.className += (elem.className) ? ' ' + this : this;
@@ -1760,7 +1634,6 @@
 			});
 			return this;
 		},
-
 		// - .removeClass(prop) mirroring jet.removeClass(@obj, prop)
 		// Remove one or more classes from each element in the set of matched elements.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1769,15 +1642,14 @@
 		// - 
 		removeClass: function (obj, prop) {
 			var classList = [];
-
 			jet.each(obj, function (i, elem) {
 				if (jet.isElement(elem)) {
 					if (jet.isString(prop)) {
-						classList = jet.trim(prop).split(' ');
+						classList = jet.trim(prop)
+							.split(' ');
 					} else if (jet.isArray(prop)) {
 						classList = prop;
 					}
-	
 					if (classList.length > 0) {
 						className = ' ' + jet.trim(elem.className) + ' ';
 						jet.each(classList, function () {
@@ -1792,7 +1664,6 @@
 			});
 			return this;
 		},
-
 		// - .attr(attr[, value]) mirroring jet.attr(@obj, attr[, value])
 		// Get the value of an attribute for the first element in the set of matched elements or set one or more attributes for every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1805,7 +1676,6 @@
 		// - 
 		attr: function (obj, attr, value) {
 			var elem, returns = {};
-
 			if (jet.isPlainObject(attr)) {
 				jet.each(attr, function (attribute, val) {
 					jet.attr(obj, attribute, val);
@@ -1828,7 +1698,6 @@
 							} else {
 								setValue = value;
 							}
-
 							if (this.setAttribute) {
 								this.setAttribute(attr, setValue);
 							} else {
@@ -1845,7 +1714,6 @@
 			}
 			return this;
 		},
-
 		// - .removeAttr(attr) mirroring jet.removeAttr(@obj, attr)
 		// Remove one or more attributes from each element in the set of matched elements.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1859,9 +1727,7 @@
 				}
 			});
 			return this;
-			
 		},
-
 		// - .html([value]) mirroring jet.html(@obj[, value])
 		// Get the innerHTML content of first element of orthe set of matched elements set the innerHTML content from each element in the set of matched elements.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1879,7 +1745,6 @@
 					} else {
 						setValue = value;
 					}
-
 					this.innerHTML = setValue;
 				});
 				return this;
@@ -1891,7 +1756,6 @@
 				return '';
 			}
 		},
-
 		// - .bind(event, callback) mirroring jet.bind(@obj, event, callback)
 		// Bind the callback function to specifed event in every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1900,16 +1764,14 @@
 		// @return {jObject}
 		// - 
 		bindEvent: function (obj, event, callback) {
-			var bindMapping = {'DOMContentLoaded': 'onload'},
-				evtName,
-				subName,
-				matches;
-
+			var bindMapping = {
+				'DOMContentLoaded': 'onload'
+			},
+				evtName, subName, matches;
 			event = jet.trim(event);
 			if (matches = eventNameRegex.exec(event)) {
 				evtName = matches[1];
 				subName = matches[2];
-
 				jet.each(obj, function () {
 					if (/^(DOMContentLoaded|onload|onload)$/i.test(evtName) && (this == doc || this == win)) {
 						jet.ready(callback);
@@ -1918,11 +1780,8 @@
 							if (!this.jEvent) {
 								this.jEvent = {};
 							}
-			
 							if (!this.jEvent[evtName]) {
-								this.jEvent[evtName] = new jEvent();
-								this.jEvent[evtName].element = this;
-				
+								this.jEvent[evtName] = jEvent(this);
 								if (this.addEventListener) {
 									this.addEventListener(evtName, this.jEvent[evtName].getHandler(), false);
 								} else if (obj.attachEvent) {
@@ -1931,16 +1790,13 @@
 									this[bindMapping[evtName] || 'on' + evtName] = this.jEvent[evtName].getHandler();
 								}
 							}
-
 							this.jEvent[evtName].add(subName, callback);
 						}
 					}
 				});
 			}
-
 			return this;
 		},
-
 		// - .unbind(event) mirroring jet.unbind(@obj, event)
 		// Unbind the specifed event in every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1949,7 +1805,6 @@
 		// - 
 		unbindEvent: function (obj, event) {
 			var evtName, subName;
-
 			event = jet.trim(event);
 			if (matches = eventNameRegex.exec(event)) {
 				evtName = matches[1];
@@ -1978,10 +1833,8 @@
 					}
 				});
 			}
-
 			return this;
 		},
-
 		// - .trigger(event) mirroring jet.trigger(@obj, event)
 		// Fire the specifed event in every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -1989,8 +1842,10 @@
 		// @return {jObject}
 		// - 
 		trigger: function (obj, event) {
-			var bindMapping = {'DOMContentLoaded': 'onload'}, e;
-
+			var bindMapping = {
+				'DOMContentLoaded': 'onload'
+			},
+				e;
 			jet.each(obj, function () {
 				if (doc.createEvent) {
 					if (/(mouse.+)|((un)?click)/i.test(event)) {
@@ -1998,11 +1853,10 @@
 					} else {
 						e = doc.createEvent('HTMLEvents');
 					}
-				    e.initEvent(event, true, true);
+					e.initEvent(event, true, true);
 				} else if (this.createEventObject) {
 					e = doc.createEventObject();
 				}
-	
 				if (this.dispatchEvent) {
 					this.dispatchEvent(e);
 				} else if (this.fireEvent) {
@@ -2013,10 +1867,8 @@
 					this['on' + event]();
 				}
 			});
-
 			return this;
 		},
-
 		// - .is(selector) mirroring jet.is(@obj, selector)
 		// Check the current matched set of elements against a selector, element, or jet object . Return true if at least one of these elements matched.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -2027,7 +1879,6 @@
 		// - 
 		is: function (obj, selector) {
 			var result = true;
-
 			if (jet.isCollection(selector)) {
 				jet.each(obj, function () {
 					if (jet.isElement(this) && result) {
@@ -2046,16 +1897,17 @@
 				});
 			} else {
 				obj = [obj];
-				return !!jet(selector).filter(function () {
-					if (jet.inArray(obj, this)) {
-						return true;
-					}
-					return false;
-				}).length;
+				return !!jet(selector)
+					.filter(function () {
+						if (jet.inArray(obj, this)) {
+							return true;
+						}
+						return false;
+					})
+					.length;
 			}
 			return result;
 		},
-
 		// - .value(value) mirroring jet.value(@obj, value)
 		// Get the current value of the first element in the set of matched elements or set the value of every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -2064,12 +1916,11 @@
 		// @return {jObject|String}
 		// - 
 		value: function (obj, value) {
-			var ref = this, elem;
-
+			var ref = this,
+				elem;
 			if (jet.isDefined(value)) {
 				jet.each(obj, function () {
 					var setValue, hook;
-	
 					hook = jValueHooks[this.type] || jValueHooks[jCore.nodeName(this)];
 					if (hook) {
 						hook.call(ref, this, value);
@@ -2079,7 +1930,6 @@
 						} else {
 							setValue = value;
 						}
-
 						if (jet.isDefined(this.value)) {
 							this.value = setValue;
 						}
@@ -2098,7 +1948,6 @@
 				return '';
 			}
 		},
-
 		// - .text(value) mirroring jet.text(@obj, value)
 		// Get the current text (innerText) of the first element in the set of matched elements or set the value of every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -2110,13 +1959,11 @@
 			if (jet.isDefined(value)) {
 				jet.each(obj, function () {
 					var setValue;
-
 					if (jCore.isFunction(value)) {
 						setValue = value.call(this.value);
 					} else {
 						setValue = value;
 					}
-
 					this.innerText = setValue;
 				});
 			} else {
@@ -2127,7 +1974,6 @@
 				return '';
 			}
 		},
-
 		// - .detach() mirroring jet.detach(@obj)
 		// Remove the set of matched elements from the DOM.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
@@ -2142,7 +1988,6 @@
 			return this;
 		}
 	}, true);
-
 	// Install Mirroring Plugin (First Element)
 	jet.install({
 		// - .sibling(type) mirroring jet.sibling(@obj, type)
@@ -2154,9 +1999,7 @@
 		sibling: function (obj, type) {
 			var direction = type + 'Sibling',
 				elementDirection = type + 'ElementSibling';
-
 			if (!obj) return null;
-
 			if (obj[elementDirection]) {
 				return obj[elementDirection];
 			} else if (obj[direction]) {
@@ -2166,10 +2009,8 @@
 					}
 				}
 			}
-			
 			return null;
 		},
-
 		// - .hasClass(classNameList) mirroring jet.hasClass(@obj, classNameList)
 		// Check the first element of the set of matched elements has included one or more classes.
 		// @param {DOMElement} obj The element to check the class.
@@ -2177,19 +2018,17 @@
 		// @return {Boolean}
 		// - 
 		hasClass: function (obj, classNameList) {
-			var elemClass, index = 0, className;
+			var elemClass, index = 0,
+				className;
 			if (jet.isString(classNameList)) {
 				classNameList = [classNameList];
 			} else if (classNameList.length == 0) {
 				return true;
 			}
-
 			if (!jet.isElement(obj)) {
 				return false;
 			}
-			
 			className = ' ' + obj.className + ' ';
-
 			while (elemClass = classNameList[index++]) {
 				if (className.indexOf(' ' + elemClass + ' ') == -1) {
 					return false;
@@ -2197,7 +2036,6 @@
 			}
 			return true;
 		},
-
 		// - .isActive() mirroring jet.isActive(@obj)
 		// Check the first element of the set of matched elements is active (focus) in current document.
 		// @param {DOMElement} obj The element to check.
@@ -2210,7 +2048,6 @@
 			}
 			return false;
 		},
-
 		// - .getUnit(prop) mirroring jet.getUnit(@obj, prop)
 		// Get the CSS value in jUnit object from the first element's position of the set of matched elements.
 		// @param {DOMElement} obj The element to get.
@@ -2218,14 +2055,9 @@
 		// @return {jUnit}
 		// - 
 		getUnit: function (obj, prop) {
-			var unitObj = new jUnit();
-			if (!obj || !jet.isElement(obj)) return unitObj;
-
-			unitObj.setBase(obj, prop);
-
-			return unitObj;
+			if (!obj || !jet.isElement(obj)) return jUnit();
+			return jUnit(obj, prop);
 		},
-
 		// - .offset() mirroring jet.offset(@obj)
 		// Get the first element's position of the set of matched elements.
 		// @param {DOMElement} obj The element to get.
@@ -2233,27 +2065,28 @@
 		// @return {PlainObject}
 		// - 
 		offset: function (obj) {
-			var offset = {left: 0, top: 0}, elem, bRect, eRect;
-
+			var offset = {
+				left: 0,
+				top: 0
+			},
+				elem, bRect, eRect;
 			if (jet.isElement(obj)) {
 				if (!obj.getBoundingClientRect) {
 					bRect = doc.body.getBoundingClientRect();
 					eRect = obj.getBoundingClientRect();
-    				offset.top = eRect.top - bRect.top;
-    				offset.left = eRect.left - bRect.left;
+					offset.top = eRect.top - bRect.top;
+					offset.left = eRect.left - bRect.left;
 				} else {
 					elem = obj;
 					while (jet.isDefined(elem.offsetLeft) && jet.isDefined(elem.offsetTop)) {
-					    offset.left += elem.offsetLeft;
-					    offset.top += elem.offsetTop;
-					    elem = elem.parentNode;
+						offset.left += elem.offsetLeft;
+						offset.top += elem.offsetTop;
+						elem = elem.parentNode;
 					}
 				}
 			}
-
 			return offset;
 		},
-
 		// - .height([value]) mirroring jet.height(@obj[, value])
 		// Get the first element's height of the set of matched elements or set the height for every matched element.
 		// @param {DOMElement} obj The element to get.
@@ -2261,11 +2094,12 @@
 		// @return {jObject|Number}
 		// - 
 		height: function (obj, value) {
-			var body = doc.getElementsByTagName('body')[0], returnValue = 0, setValue;
+			var body = doc.getElementsByTagName('body')[0],
+				returnValue = 0,
+				setValue;
 			if (!jet.isDefined(obj) || !jet.isElement(obj)) {
 				obj = win;
 			}
-
 			if (jet.isDefined(value)) {
 				if (obj != win && obj != doc && obj != body) {
 					if (jet.isFunction(value)) {
@@ -2274,7 +2108,6 @@
 						setValue = value;
 					}
 					setValue += 'px';
-
 					jet.css(obj, 'height', setValue);
 				}
 				return this;
@@ -2282,7 +2115,8 @@
 				if (obj == win) {
 					return parseInt(win.innerHeight);
 				} else if (obj == doc || obj == body) {
-					returnValue = doc.documentElement.clientHeight || jet('body').css('clientHeight');
+					returnValue = doc.documentElement.clientHeight || jet('body')
+						.css('clientHeight');
 					returnValue = parseInt(value);
 					return returnValue;
 				} else {
@@ -2291,7 +2125,6 @@
 				}
 			}
 		},
-
 		// - .innerHeight() mirroring jet.innerHeight(@obj)
 		// Get the first element's height without border, padding and margin of the set of matched elements.
 		// @param {DOMElement} obj The element to get.
@@ -2301,10 +2134,8 @@
 			if (!jet.isElement(obj)) {
 				return 0;
 			}
-
 			return parseInt(jet.css(obj, 'height')) + parseInt(jet.css(obj, 'padding-top')) + parseInt(jet.css(obj, 'padding-bottom'));
 		},
-
 		// - .outerHeight() mirroring jet.outerHeight(@obj)
 		// Get the first element's height with padding and border, even include the margin of the set of matched elements.
 		// @param {DOMElement} obj The element to get.
@@ -2316,14 +2147,12 @@
 				return 0;
 			}
 			includeMargin = (includeMargin) ? true : false;
-
 			value = parseInt(jet.css(obj, 'height')) + parseInt(jet.css(obj, 'padding-top')) + parseInt(jet.css(obj, 'padding-bottom')) + parseInt(jet.css(obj, 'border-top')) + parseInt(jet.css(obj, 'border-bottom'));
 			if (includeMargin) {
 				value += (parseInt(jet.css(obj, 'margin-top')) + parseInt(jet.css(obj, 'margin-bottom')));
 			}
 			return value;
 		},
-
 		// - .width([value]) mirroring jet.width(@obj[, value])
 		// Get the first element's width of the set of matched elements or set the width for every matched element.
 		// @param {DOMElement} obj The element to get.
@@ -2331,11 +2160,12 @@
 		// @return {jObject|Number}
 		// - 
 		width: function (obj, value) {
-			var body = doc.getElementsByTagName('body')[0], returnValue = 0, setValue;
+			var body = doc.getElementsByTagName('body')[0],
+				returnValue = 0,
+				setValue;
 			if (!jet.isDefined(obj) || !jet.isElement(obj)) {
 				obj = win;
 			}
-
 			if (jet.isDefined(value)) {
 				if (obj != win && obj != doc && obj != body) {
 					if (jet.isFunction(value)) {
@@ -2344,7 +2174,6 @@
 						setValue = value;
 					}
 					setValue += 'px';
-
 					jet.css(obj, 'width', setValue);
 				}
 				return this;
@@ -2352,7 +2181,8 @@
 				if (obj == win) {
 					return parseInt(win.innerWidth);
 				} else if (obj == doc || obj == body) {
-					returnValue = doc.documentElement.clientWidth || jet('body').css('clientWidth');
+					returnValue = doc.documentElement.clientWidth || jet('body')
+						.css('clientWidth');
 					returnValue = parseInt(value);
 					return returnValue;
 				} else {
@@ -2361,7 +2191,6 @@
 				}
 			}
 		},
-
 		// - .innerWidth() mirroring jet.innerWidth(@obj)
 		// Get the first element's width without border, padding and margin of the set of matched elements.
 		// @param {DOMElement} obj The element to get.
@@ -2371,10 +2200,8 @@
 			if (!jet.isElement(obj)) {
 				return 0;
 			}
-
 			return parseInt(jet.css(obj, 'width')) + parseInt(jet.css(obj, 'padding-left')) + parseInt(jet.css(obj, 'padding-right'));
 		},
-
 		// - .outerWidth() mirroring jet.outerWidth(@obj)
 		// Get the first element's width with padding and border, even include the margin of the set of matched elements.
 		// @param {DOMElement} obj The element to get.
@@ -2386,14 +2213,12 @@
 				return 0;
 			}
 			includeMargin = (includeMargin) ? true : false;
-
 			value = parseInt(jet.css(obj, 'width')) + parseInt(jet.css(obj, 'padding-left')) + parseInt(jet.css(obj, 'padding-right')) + parseInt(jet.css(obj, 'border-left')) + parseInt(jet.css(obj, 'border-right'));
 			if (includeMargin) {
 				value += (parseInt(jet.css(obj, 'margin-left')) + parseInt(jet.css(obj, 'margin-right')));
 			}
 			return value;
 		},
-
 		// - .parent([selector]) mirroring jet.parent(@obj[, selector])
 		// Get the parent element from first element of the set of matched element, optionally filtered by a selector.
 		// @param {DOMElement} obj The point element.
@@ -2405,10 +2230,8 @@
 		parent: function (obj, selector) {
 			var parent = obj.parentNode;
 			if (!obj) return null;
-
 			return (parent && parent.nodeType !== 11 && (!selector || jet.is(parent, selector))) ? jet(parent) : jet();
 		},
-
 		// - .parents([selector]) mirroring jet.parents(@obj[, selector])
 		// Get the ancestors from first element of the set of matched element, optionally filtered by a selector.
 		// @param {DOMElement} obj The point element.
@@ -2418,22 +2241,20 @@
 		// @return {jObject}
 		// - 
 		parents: function (obj, selector) {
-			var elements = [], elem;
+			var elements = [],
+				elem;
 			if (!obj) return null;
-
 			elem = obj;
 			while (elem = elem.parentNode) {
 				if (!parent && parent.nodeType == 11) {
 					break;
 				}
-
 				if (!selector || jet.is(elem, selector)) {
 					elements.push(elem);
 				}
 			}
 			return jet(elements);
 		},
-
 		// - .childs([selector]) mirroring jet.childs(@obj[, selector])
 		// Get the child elements from first element of the set of matched element, optionally filtered by a selector.
 		// @param {DOMElement} obj The point element.
@@ -2443,19 +2264,17 @@
 		// @return {jObject}
 		// - 
 		childs: function (obj, selector) {
-			var elements = [], elem;
+			var elements = [],
+				elem;
 			if (!obj) return null;
-
 			elem = obj.childNodes[0];
 			while (elem = jet.sibling(elem, 'next')) {
 				if (!selector || jet.is(elem, selector)) {
 					elements.push(elem);
 				}
 			}
-
 			return jet(elements);
 		},
-
 		// - .scrollTop([value]) mirroring jet.scrollTop(@obj[, value])
 		// Get the first element's scroll top of the set of matched elements or set the scroll top for every matched element.
 		// @param {DOMElement} obj The element to get.
@@ -2464,7 +2283,6 @@
 		// - 
 		scrollTop: function (obj, value) {
 			var y = 0;
-
 			if (jet.isDefined(value)) {
 				value = parseInt(value);
 				win.scrollTo(jet.scrollLeft(obj), value);
@@ -2475,11 +2293,9 @@
 				} else if (jet.isElement(obj)) {
 					y = obj.scrollTop || 0;
 				}
-	
 				return y;
 			}
 		},
-
 		// - .scrollLeft([value]) mirroring jet.scrollLeft(@obj[, value])
 		// Get the first element's scroll left of the set of matched elements or set the scroll left for every matched element.
 		// @param {DOMElement} obj The element to get.
@@ -2488,7 +2304,6 @@
 		// - 
 		scrollLeft: function (obj, value) {
 			var x = 0;
-
 			if (jet.isDefined(value)) {
 				value = parseInt(value);
 				win.scrollTo(value, jet.scrollTop(obj));
@@ -2499,11 +2314,9 @@
 				} else if (jet.isElement(obj)) {
 					x = obj.scrollLeft || 0;
 				}
-
 				return x;
 			}
 		},
-
 		// - .scrollTo(x, y) mirroring jet.scrollTo(@obj, x, y)
 		// Scroll every matched element to specified position.
 		// @param {DOMElement} obj The element to get.
@@ -2513,30 +2326,29 @@
 		// - 
 		scrollTo: function (obj, x, y) {
 			var elem;
-
 			if (!jet.isElement(obj)) {
 				return this;
 			}
-
 			if (x.constructor === jObject) {
 				elem = x[0];
-				x = jet.offset(elem).x;
-				y = jet.offset(elem).y;
+				x = jet.offset(elem)
+					.x;
+				y = jet.offset(elem)
+					.y;
 			} else if (jet.isElement(x)) {
 				elem = x;
-				x = jet.offset(elem).x;
-				y = jet.offset(elem).y;
+				x = jet.offset(elem)
+					.x;
+				y = jet.offset(elem)
+					.y;
 			}
-
 			x = parseInt(x);
 			y = parseInt(y);
-
 			if (jet.isFunction(obj.scrollTo)) {
 				obj.scrollTo(x, y);
 			}
 			return this;
 		},
-
 		// - .handler(event) mirroring jet.handler(@obj, event)
 		// Get the first element's event callback function of the set of matched elements
 		// @param {DOMElement} obj The element to get.
@@ -2544,1094 +2356,1061 @@
 		// @return {Function}
 		// - 
 		handler: function (obj, event) {
-			var bindMapping = {'DOMContentLoaded': 'onload'};
+			var bindMapping = {
+				'DOMContentLoaded': 'onload'
+			};
 			return obj[bindMapping[event] || 'on' + event] || obj[event];
 		},
-
 		// - .serialize() mirroring jet.serialize(@obj)
 		// Encode a set of form elements as a string for submission.
 		// @return {String}
 		// - 
 		serialize: function (obj) {
 			if (jCore.nodeName(obj, 'form') && obj.elements) {
-				return jet.buildQueryString(jet(obj.elements).filter(function () {
-					if (submitNameRegex.test(this.tagName) && !submitTypeRegex.test(this.type) && !jet.is(this, ':disabled') && (!checkableRegex.test(this.type)) || this.checked) {
-						return true;
-					}
-					return false;
-				}).walk(function (i, elem) {
-					var value = jet(this).value();
-					if (jet.isArray(value)) {
-						return jet.walk(value, function () {
-							return {name: elem.name, value: this};
-						});
-					} else {
-						return {name: elem.name, value: elem.value};
-					}
-				}));
+				return jet.buildQueryString(jet(obj.elements)
+					.filter(function () {
+						if (submitNameRegex.test(this.tagName) && !submitTypeRegex.test(this.type) && !jet.is(this, ':disabled') && (!checkableRegex.test(this.type)) || this.checked) {
+							return true;
+						}
+						return false;
+					})
+					.walk(function (i, elem) {
+						var value = jet(this)
+							.value();
+						if (jet.isArray(value)) {
+							return jet.walk(value, function () {
+								return {
+									name: elem.name,
+									value: this
+								};
+							});
+						} else {
+							return {
+								name: elem.name,
+								value: elem.value
+							};
+						}
+					}));
 			}
-
 			return '';
 		}
 	});
 
-	jEngine = {
-		_attributeCache: [],
-		get: function (selector, baseElements) {
-			var selectorSetting,
-				blocks,
-				matches,
-				elements = [doc],
-				tempElements = [],
-				elem,
-				elemGroup = [],
-				jObj = new jObject(),
-				sibling = '',
-
-				// Index and Length
-				index, eIndex, length, eLength,
-
-				// Attribute Varible
-				attributeSetting,
-				attr,
-				validPass = true,
-				
-				// Pseudo Varible
-				movementSettingting,
-				movementSetting,
-				pseudo,
-				prevList = [],
-				nodeName,
-				movement,
-				isType,
-				movementSetting = {},
-				nth,
-				position = 0,
-				next = 0;
-
-			if (jet.isDefined(baseElements)) {
-				if (jet.isElement(baseElements)) {
-					elements = [baseElements];
-				} else if (jet.IsCollection(baseElements)) {
-					elements = baseElements;
-				}
+	function launchJet(selector, baseElements) {
+		var attributeCache = [],
+			selectorSetting, blocks, matches, elements = [doc],
+			tempElements = [],
+			elem, elemGroup = [],
+			jObj = new jObject(),
+			sibling = '',
+			// Index and Length
+			index, eIndex, length, eLength,
+			// Attribute Varible
+			attributeSetting, attr, validPass = true,
+			// Pseudo Varible
+			movementSettingting, movementSetting, pseudo, prevList = [],
+			nodeName, movement, isType, movementSetting = {},
+			nth, position = 0,
+			next = 0;
+		if (jet.isDefined(baseElements)) {
+			if (jet.isElement(baseElements)) {
+				elements = [baseElements];
+			} else if (jet.IsCollection(baseElements)) {
+				elements = baseElements;
 			}
-			selector = jCore.selectorSpecialChar(selector);
-
-			try {
-				if (jet.trim(selector) === 'body') {
-					jObj.add(doc.body);
-				} else {
-					if (elements.length > 0) {
-						for (index = 0, length = elements.length; index < length; index++) {
-							elem = elements[index].querySelectorAll(selector);
-							for (eIndex = 0, eLength = elem.length; eIndex < eLength; eIndex++) {
-								jObj.add(elem[eIndex]);
-							}
-						}
-					} else {
-						elements = doc.querySelectorAll(selector);
-						if (elements.length > 0) {
-							for (index = 0, length = elements.length; index < length; index++) {
-								jObj.add(elements[index]);
-							}
-						}
-					}
-				}
-			}
-			catch (error) {
-				while ((blocks = selectorRegex.exec(selector)) !== null) {
-					/* START: Define selector type, attribute selector, pseudo and sibling */
-					selectorSetting = {
-						type: blocks[2],
-						tag: (blocks[3]) ? blocks[3] : '*',
-						classes: [],
-						attribute: [],
-						pseudo: []
-					};
-					
-					tmpElements = elements;
-					elements = [];
-	
-					while ((matches = subAttrRegex.exec(blocks[4])) !== null) {
-						if (matches[1] === '.') {
-							selectorSetting.classes.push(matches[2]);
-						} else {
-							selectorSetting.attribute.push('[id=' + matches[2] + ']');
-						}
-					}
-	
-					while ((matches = attributeSelectorRegex.exec(blocks[5])) !== null) {
-						selectorSetting.attribute.push(matches[0]);
-					}
-	
-					while ((matches = pseudoSelectorRegex.exec(blocks[5])) !== null) {
-						selectorSetting.pseudo.push(matches[0]);
-					}
-					
-					selectorSetting.tag = selectorSetting.tag.replace(/(\.|#).*/, '');
-	
-					/* END: Define selector type, attribute selector, pseudo and sibling */
-	
-					for (index = 0, length = tmpElements.length; index < length; index++) {
-						// Sibling Selector
-						if (sibling) {
-							if (sibling === '~') {
-								elem = tmpElements[index];
-								while ((elem = jet.sibling(elem, 'next'))) {
-									if (elem.walked) break;
-									if (jCore.match(elem, selectorSetting)) {
-										elements.push(elem);
-										elem.walked = true;
-									}
-								}
-							} else if (sibling === '+') { 
-								elem = tmpElements[index];
-								while ((elem = jet.sibling(elem, 'next'))) {
-									if (elem.walked) break;
-									if (jCore.match(elem, selectorSetting)) {
-										elements.push(elem);
-										elem.walked = true;
-									}
-		
-									break;
-								}
-							} else if (sibling === '>') {
-								elem = jet.childAt(tmpElements[index], 'first');
-		
-								do {
-									if (!elem || elem.walked) break;
-									if (jCore.match(elem, selectorSetting)) {
-										elements.push(elem);
-										elem.walked = true;
-									}
-								} while (elem && (elem = jet.sibling(elem, 'next')));
-							}
-						} else {
-							// Normal Element Finder
-							if (selectorSetting.type == '#') {
-								elem = doc.getElementById(selectorSetting.tag);
-								if (elem && (tmpElements[index] === doc || jet.comparePosition(tmpElements[index], elem) === 20)) {
-									if (jet.hasClass(elem, selectorSetting.classes)) {
-										elements.push(elem);
-									}
-								}
-							} else {
-								if (selectorSetting.type == '.') {
-									if (doc.getElementsByClassName) {
-										elem = tmpElements[index].getElementsByClassName(selectorSetting.tag);
-									}
-								} else {
-									if (selectorSetting.tag == 'body') {
-										if (tmpElements[index] == doc) {
-											elem = [doc.body];
-										} else {
-											elements = [];
-											break;
-										}
-									} else {
-										elem = tmpElements[index].getElementsByTagName(selectorSetting.tag);
-									}
-								}
-	
-								for (eIndex = 0, eLength = elem.length; eIndex < eLength; eIndex++) {
-									if (jet.hasClass(elem[eIndex], selectorSetting.classes)) {
-										elements.push(elem[eIndex]);
-									}
-								}
-							}
-						}
-					}
-	
-					index = 0;
-					while (elem = elements[index++]) {
-						elem.walked = false;
-					}
-	
-					// Attribute Selector
-					if (selectorSetting.attribute.length > 0) {
-						tmpElements = elements;
-						elements = [];
-						for (index = 0, length = tmpElements.length; index < length; index++) {
-							eIndex = 0;
-							validPass = true;
-							while ((attr = selectorSetting.attribute[eIndex++])) {
-								if (jEngine._attributeCache[attr]) {
-									matches = jEngine._attributeCache[attr];
-								} else {
-									matches = attr.match(attributeRegex);
-									jEngine._attributeCache[attr] = matches;
-								}
-								
-								attributeSetting = {
-									attribute: matches[1],
-									operation: matches[3],
-									value: matches[6] || matches[8] || matches[9]
-								};
-				
-								value = jet.attr(tmpElements[index], attributeSetting.attribute);
-								if (!attributeSetting.value) {
-									if (!value) {
-										validPass = false;
-										break;
-									}
-								} else {
-									if (attributeSetting.operation) {
-										attrOperator = {
-											'^': '^' + attributeSetting.value,
-											'$': attributeSetting.value + '$',
-											'*': attributeSetting.value,
-											'|': '^' + attributeSetting.value + '(\\-\\w+)*$',
-											'~': '\\b' + attributeSetting.value + '\\b'
-										};
-								
-										if (!(new RegExp(attrOperator[attributeSetting.operation])).test(value)) {
-											validPass = false;
-											break;
-										}
-									} else {
-										if (value !== attributeSetting.value) {
-											validPass = false;
-											break;
-										}
-									}
-								}
-							}
-	
-							if (validPass) {
-								elements.push(tmpElements[index]);
-							}
-						}
-					}
-	
-					// Pseudo Selector
-					if (selectorSetting.pseudo.length > 0) {
-						index = 0;
-						while ((pseudo = selectorSetting.pseudo[index++])) {
-							tmpElements = elements;
-							elements = [];
-							matches = pseudo.match(pseudoRegex);
-							movementSettingting = {
-								type: matches[1],
-								value: matches[3]
-							};
-							eIndex = 0;
-	
-							if (movementSettingting.type === 'contains') {
-								while ((elem = tmpElements[eIndex++])) {
-									if ((elem.innerText || elem.textContent || '').indexOf(movementSettingting.value) > -1) {
-										elements.push(elem);
-									}
-								}
-							} else if (movementSettingting.type === 'only-child') {
-								while ((elem = tmpElements[eIndex++])) {
-									if (!jet.sibling(elem, 'next') && !jet.sibling(elem, 'previous')) {
-										elements.push(elem);
-									}
-								}
-							} else if (movementSettingting.type === 'first-child') {
-								while ((elem = tmpElements[eIndex++])) {
-									if (jet.childAt(elem.parentNode, 'first') === elem) {
-										elements.push(elem);
-									}
-								}
-							} else if (movementSettingting.type === 'last-child') {
-								while ((elem = tmpElements[eIndex++])) {
-									if (jet.childAt(elem.parentNode, 'last') === elem) {
-										elements.push(elem);
-									}
-								}
-							} else if (movementSettingting.type === 'not') {
-								while ((elem = tmpElements[eIndex++])) {
-									if (movementSettingting.value.substring(0, 1) === '.') {
-										if (!jet.hasClass(elem, [movementSettingting.value.substring(1)])) {
-											elements.push(elem);
-										}
-									} else if (movementSettingting.value.substring(0, 1) === '#') {
-										if (elem.id !== movementSettingting.value.substring(1)) {
-											elements.push(elem);
-										}
-									} else {
-										if (jCore.nodeName(elem, movementSettingting.value)) {
-											elements.push(elem);
-										}
-									}
-								}
-							} else if (movementSettingting.type.substring(0, 3) === 'nth') {
-								if (movementSettingting.value) movementSettingting.value = movementSettingting.value.replace(/^2n\+1$/, 'odd').replace(/^2n$/, 'even');
-	
-								nth = nthRegex.exec(pseudo);
-								movement = (nth[2] === 'last') ? ['last', 'previous'] : ['first', 'next'];
-								isType = (nth[3] === 'of-type') ? true : false;
-					
-								movementSetting = {
-									start: 0,
-									step: 1,
-									limit: -1
-								};
-	
-								if (movementSettingting.value === 'n') {
-									elements = tmpElements;
-									continue;
-								} else if (movementSettingting.value === 'even') {
-									movementSetting.start = 1;
-									movementSetting.step = 2;
-								} else if (movementSettingting.value === 'odd') {
-									movementSetting.start = 0;
-									movementSetting.step = 2;
-								} else {
-									matches = movementSettingting.value.match(nthValueRegex);
-									if (!matches[3]) {
-										movementSetting.start = movementSetting.limit = parseInt(matches[2]) - 1;
-									} else {
-										movementSetting.step = (matches[4]) ? parseInt(matches[4]) : 1;
-										if (matches[1] === '-') {
-											movementSetting.limit = (matches[8]) ? parseInt(matches[8]) - 1 : 0;
-											movementSetting.start = movementSetting.limit % movementSetting.step;
-										} else {
-											movementSetting.start = (matches[8]) ? parseInt(matches[8]) - 1 : 0;
-										}
-									}
-								}
-	
-								while ((elem = tmpElements[eIndex++])) {
-									prevEle = elem.parentNode;
-									prevEle.childExists = prevEle.childExists || {};
-									nodeName = elem.nodeName;
-	
-									if (!prevEle.childExists[nodeName]) {
-										elem = jet.childAt(prevEle, movement[0]);
-										next = movementSetting.start;
-										while (elem && (movementSetting.limit === -1 || position <= movementSetting.limit)) {
-											if (!isType || (elem.nodeName === nodeName)) {
-												if (position === next) {
-													if (elem.nodeName === nodeName) {
-														elements[elements.length] = elem;
-													}
-				
-													next += movementSetting.step;
-												}
-												position++;
-											}
-											elem = jet.sibling(elem, movement[1]);
-										}
-										prevEle.childExists[nodeName] = true;
-										prevList[prevList.length] = prevEle;
-										position = 0;
-									}
-								}
-							
-								eIndex = 0;
-								while ((elem = prevList[eIndex++])) {
-									elem.childExists = {};
-								}
-							}
-						}
-					}
-	
-					sibling = (jet.trim(blocks[8]) != ',') ? jet.trim(blocks[8]) : '';
-					if (blocks[8].indexOf(',') != -1) {
-						for (index = 0, length = elements.length; index < length; index++) {
-							if (!elements[index].added) {
-								jObj.add(elements[index]);
-								elements[index].added = true;
-							}
-						}
-						elements = [doc];
-					}
-				}
-	
+		}
+		selector = jCore.selectorSpecialChar(selector);
+		try {
+			if (jet.trim(selector) === 'body') {
+				jObj.add(doc.body);
+			} else {
 				if (elements.length > 0) {
 					for (index = 0, length = elements.length; index < length; index++) {
-						if (!jet.isDefined(elements[index].added) || !elements[index].added) {
+						elem = elements[index].querySelectorAll(selector);
+						for (eIndex = 0, eLength = elem.length; eIndex < eLength; eIndex++) {
+							jObj.add(elem[eIndex]);
+						}
+					}
+				} else {
+					elements = doc.querySelectorAll(selector);
+					if (elements.length > 0) {
+						for (index = 0, length = elements.length; index < length; index++) {
 							jObj.add(elements[index]);
 						}
 					}
 				}
 			}
-
-			jObj.finalize();
-			return jObj;
-		}
-	};
-
-	// jet Color Object
-	jColor = function () {
-		
-	};
-
-	jCore.extend(jColor.prototype, {
-		R: 0,
-		G: 0,
-		B: 0,
-		A: 255,
-
-		set: function (value) {
-			var matches;
-			if (jet.isString(value)) {
-				if (matches = hexRegex.exec(jet.trim(value))) {
-					this.r = parseInt(matches[1], 16);
-					this.g = parseInt(matches[2], 16);
-					this.b = parseInt(matches[3], 16);
-					if (matches[4]) {
-						this.a = parseInt(matches[4], 16);
-					}
-				} else if (matches = colorRegex.exec(jet.trim(value))) {
-					this.r = parseInt(matches[1], 10);
-					this.g = parseInt(matches[2], 10);
-					this.b = parseInt(matches[3], 10);
-				}
-			}
-
-			return this;
-		},
-
-		subtract: function (value) {
-			var color = new jColor();
-			color.set(value);
-			this.r -= color.r;
-			if (this.r <= 0) this.r = 0;
-			this.g -= color.g;
-			if (this.g <= 0) this.g = 0;
-			this.b -= color.b;
-			if (this.b <= 0) this.b = 0;
-			this.a -= (255 - color.a);
-			if (this.a <= 0) this.a = 0;
-
-			return this;
-		},
-
-		mix: function (value) {
-			var color = new jColor();
-			color.set(value);
-			this.r += color.r;
-			if (this.r > 255) this.r = 255;
-			this.g += color.g;
-			if (this.g > 255) this.g = 255;
-			this.b += color.b;
-			if (this.b > 255) this.b = 255;
-			this.a += (255 - color.a);
-			if (this.a > 255) this.a = 255;
-
-			return this;
-		},
-
-		diff: function (value, percentage) {
-			var color = new jColor();
-			color.set(value);
-
-			percentage = parseFloat(percentage);
-			percentage = (percentage > 1) ? 1 : percentage;
-
-			if (this.r > color.r) {
-				color.r = this.r - Math.ceil((this.r - color.r) * percentage);
-			} else {
-				color.r = this.r + Math.ceil((color.r - this.r) * percentage);
-			}
-
-			if (this.g > color.g) {
-				color.g = this.g - Math.ceil((this.g - color.g) * percentage);
-			} else {
-				color.g = this.g + Math.ceil((color.g - this.g) * percentage);
-			}
-			
-			if (this.b > color.b) {
-				color.b = this.b - Math.ceil((this.b - color.b) * percentage);
-			} else {
-				color.b = this.b + Math.ceil((color.b - this.b) * percentage);
-			}
-			
-			return color;
-		},
-
-		toHex: function () {
-			return '#' + (this.r < 16 ? '0' + this.r.toString(16) : this.r.toString(16)) +
-			(this.g < 16 ? '0' + this.g.toString(16) : this.g.toString(16)) +
-			(this.b < 16 ? '0' + this.b.toString(16) : this.b.toString(16));
-		},
-
-		toFullHex: function () {
-			return '#' + (this.r < 16 ? '0' + this.r.toString(16) : this.r.toString(16)) +
-			(this.g < 16 ? '0' + this.g.toString(16) : this.g.toString(16)) +
-			(this.b < 16 ? '0' + this.b.toString(16) : this.b.toString(16)) +
-			(this.a < 16 ? '0' + this.a.toString(16) : this.a.toString(16));
-		}
-	});
-
-	// jet Unit
-	jUnit = function () {
-
-	};
-
-	jCore.extend(jUnit.prototype, {
-		isColor: false,
-		colorObj: null,
-		diff: null,
-		pixel: null,
-		prop: '',
-		parentPx: null,
-		hasUnit: false,
-
-		convertToPx: function (value, unit, parent) {
-			if (this.isColor) {
-				return 0;
-			}
-			value = parseFloat(value);
-
-			switch (unit) {
-				case '%':
-					if (!jet.isDefined(parent)) return 0;
-					return parent * (value / 100);
-				case 'em':
-					if (!jet.isDefined(parent)) return 0;
-					return parent * value;
-				case 'px':
-					return value;
-				case 'in':
-					return Math.round(parseFloat(value) * 96);
-				case 'pt':
-					return Math.round(parseFloat(value, 10) * 96 / 72);
-				case 'pc':
-					return Math.round(parseFloat(value, 10) * 96 / 6);
-				case 'cm':
-					return Math.round(parseFloat(value) * 96 / 2.54);
-				case 'cm':
-					return Math.round(parseFloat(value) * 96 / 25.4);
-				default:
-					return value;
-			}
-		},
-
-		convertToUnit: function (unit) {
-			if (this.isColor) {
-				return 0;
-			}
-
-			switch (unit) {
-				case '%':
-					return (this.pixel / this.parentPx) * 100;
-				case 'em': 
-					return this.pixel / this.parentPx;
-				case 'px': 
-					return this.pixel;
-				case 'in': 
-					return this.pixel / 96;
-				case 'pt': 
-					return this.pixel / 96 * 72;
-				case 'pc': 
-					return this.pixel / 96 * 6;
-				case 'cm': 
-					return this.pixel / 96 * 2.54;
-				case 'mm': 
-					return this.pixel / 96 * 25.4;
-				default:
-					return this.pixel;
-			}
-		},
-
-		setBase: function (obj, prop) {
-			var propValue, parentEle, matches, color;
-
-			if (jet.isElement(obj)) {
-				this.prop = prop;
-				propValue = jet.css(obj, prop);
-
-				if (jUnitHooks[this.prop] && jUnitHooks[this.prop].setBase) {
-					return jUnitHooks[this.prop].setBase.call(this, propValue, obj);
-				}
-
-				if (colorRegex.test(propValue) || hexRegex.test(propValue)) {
-					// Is Color value
-					this.isColor = true;
-					color = new jColor();
-					color.set(propValue);
-					this.colorObj = color;
-				} else if (jet.isDefined(propValue)) {
-					// Obtain parent element's prop value in pixel
-					parentEle = jet(obj).parent();
-					if (jet.isDefined(parentEle)) {
-						if ((matches = unitRegex.exec(parentEle.css(prop))) !== null) {
-							this.parentPx = parseInt(matches[1]);
-						}
-					}
-
-					if ((matches = unitRegex.exec(propValue)) !== null) {
-						if (matches[2]) {
-							this.hasUnit = true;
-							this.pixel = this.convertToPx(matches[1], matches[2].toLowerCase(), this.parentPx);
-						} else {
-							this.pixel = parseFloat(matches[1]);
-						}
+		} catch (error) {
+			while ((blocks = selectorRegex.exec(selector)) !== null) { /* START: Define selector type, attribute selector, pseudo and sibling */
+				selectorSetting = {
+					type: blocks[2],
+					tag: (blocks[3]) ? blocks[3] : '*',
+					classes: [],
+					attribute: [],
+					pseudo: []
+				};
+				tmpElements = elements;
+				elements = [];
+				while ((matches = subAttrRegex.exec(blocks[4])) !== null) {
+					if (matches[1] === '.') {
+						selectorSetting.classes.push(matches[2]);
+					} else {
+						selectorSetting.attribute.push('[id=' + matches[2] + ']');
 					}
 				}
-			}
-
-			return this;
-		},
-
-		calculateDiff: function (value) {
-			var val;
-			if (jUnitHooks[this.prop] && jUnitHooks[this.prop].calculateDiff) {
-				return jUnitHooks[this.prop].calculateDiff.call(this, value);
-			}
-
-			if (!this.isColor) {
-				if ((matches = unitRegex.exec(value)) !== null) {
-					if (matches[2]) {
-						switch (matches[2].toLowerCase()) {
-							case '%':
-								this.diff = Math.round(this.pixel * ((parseFloat(matches[1]) / 100))) - this.pixel;
-							break;
-							case 'em':
-								this.diff = Math.round(this.parentPx * parseFloat(matches[1])) - this.pixel;
-							break;
-							default:
-								val = this.convertToUnit(matches[2]);
-								this.diff = (val < 0) ? parseFloat(matches[1]) - (-val) : parseFloat(matches[1]) - val;
-							break;
+				while ((matches = attributeSelectorRegex.exec(blocks[5])) !== null) {
+					selectorSetting.attribute.push(matches[0]);
+				}
+				while ((matches = pseudoSelectorRegex.exec(blocks[5])) !== null) {
+					selectorSetting.pseudo.push(matches[0]);
+				}
+				selectorSetting.tag = selectorSetting.tag.replace(/(\.|#).*/, ''); /* END: Define selector type, attribute selector, pseudo and sibling */
+				for (index = 0, length = tmpElements.length; index < length; index++) {
+					// Sibling Selector
+					if (sibling) {
+						if (sibling === '~') {
+							elem = tmpElements[index];
+							while ((elem = jet.sibling(elem, 'next'))) {
+								if (elem.walked) break;
+								if (jCore.match(elem, selectorSetting)) {
+									elements.push(elem);
+									elem.walked = true;
+								}
+							}
+						} else if (sibling === '+') {
+							elem = tmpElements[index];
+							while ((elem = jet.sibling(elem, 'next'))) {
+								if (elem.walked) break;
+								if (jCore.match(elem, selectorSetting)) {
+									elements.push(elem);
+									elem.walked = true;
+								}
+								break;
+							}
+						} else if (sibling === '>') {
+							elem = jet.childAt(tmpElements[index], 'first');
+							do {
+								if (!elem || elem.walked) break;
+								if (jCore.match(elem, selectorSetting)) {
+									elements.push(elem);
+									elem.walked = true;
+								}
+							} while (elem && (elem = jet.sibling(elem, 'next')));
 						}
 					} else {
-						this.diff = (this.pixel < 0) ? parseFloat(matches[1]) - (-this.pixel) : parseFloat(matches[1]) - this.pixel;
-					}
-				}
-			}
-
-			return this;
-		},
-
-		take: function (percentage) {
-			if (jUnitHooks[this.prop] && jUnitHooks[this.prop].take) {
-				return jUnitHooks[this.prop].take.call(this, percentage);
-			}
-
-			return (this.pixel + (this.diff * percentage)) + (this.hasUnit ? 'px' : '');
-		}
-	});
-
-	// Animation
-	jAnimate = function () {
-		// Reset reference object
-		this.queue = [];
-		this.unit = {};
-		this.element = null;
-	};
-
-	jAnimate.easing = {
-		linear: function(percent) {
-			return percent;
-		},
-
-		onswing: function(percent) {
-			return 0.5 - Math.cos(percent * Math.pI) / 2;
-		},
-
-		easingIn: function (percent) {
-			return (1 - (Math.cos((percent / 2) * Math.pI)));
-		},
-
-		easingOut: function (percent) {
-			return (Math.cos(((1 - percent) / 2) * Math.pI));
-		}
-	};
-
-	jAnimate.environmentFPS = 60;
-	jAnimate.speed = 1;
-	jAnimate.acceptedProp = /^scroll(Left|Top)|width|height|left|top|right|bottom|opacity|fontSize|color|backgroundColor|border((Left|Right|Top|Bottom)?Width)|lineHeight|padding(Left|Right|Top|Bottom)?|margin(Left|Right|Top|Bottom)?$/;
-	jAnimate.getPitch = function () {
-		return Math.ceil(1000 / (jAnimate.environmentFPS * jAnimate.speed)) || 1;
-	};
-	jAnimate.getFrames = function (duration) {
-		return Math.ceil(duration / (1000 / jAnimate.environmentFPS));
-	};
-	jAnimate.getPercentage = function (max, frame) {
-		if (max == 0) return 1;
-		return frame / max;
-	};
-	jAnimate.setSpeed = function (value) {
-		jAnimate.speed = parseFloat(value);
-		if (jAnimate.speed <= 0) {
-			jAnimate.speed = 1;
-		}
-		return this;
-	};
-
-	jCore.extend(jAnimate.prototype, {
-		queue: [],
-		unit: {},
-		onPlaying: false,
-		element: null,
-
-		init: function (obj) {
-			if (jet.isElement(obj)) {
-				this.element = obj;
-				return true;
-			}
-			return false;
-		},
-
-		apply: function (prop, duration, easing, callbackObj) {
-			var index, propAllowed = {}, obj;
-
-			if (jet.isPlainObject(prop)) {
-				for (index in prop) {
-					if (jAnimate.acceptedProp.test(jet.camelCase(index))) {
-						propAllowed[index] = prop[index];
-					}
-				}
-
-				obj = {
-					to: propAllowed,
-					progress: 0,
-					frames: jAnimate.getFrames(duration),
-					step: null,
-					complete: null,
-					easing: easing
-				};
-				
-				if (jet.isPlainObject(callbackObj)) {
-					if (jet.isFunction(callbackObj.step)) {
-						obj.step = callbackObj.step;
-					}
-
-					if (jet.isFunction(callbackObj.complete)) {
-						obj.complete = callbackObj.complete;
-					}
-				}
-
-				this.queue.push(obj);
-			}
-			return this;
-		},
-
-		wait: function (duration, callbackObj) {
-			this.apply({}, duration, 'Linear', callbackObj);
-			return this;
-		},
-
-		play: function () {
-			var that = this;
-			if (!this.onPlaying) {
-				this.onPlaying = true;
-				setTimeout(function () {
-					var index, unit, method;
-
-					if (that.queue.length > 0) {
-						if (that.queue[0].progress == that.queue[0].frames) {
-							that.queue[0].progress = 0;
-							for (index in that.queue[0].to) {
-								jet.css(that.element, index, that.queue[0].to[index]);
-							}
-							that.unit = {};
-
-							if (that.queue[0].complete) {
-								that.queue[0].complete.call(that.element);
-							}
-
-							that.queue = that.queue.slice(1);
-							if (that.queue.length == 0) {
-								that.onPlaying = false;
-								return;
+						// Normal Element Finder
+						if (selectorSetting.type == '#') {
+							elem = doc.getElementById(selectorSetting.tag);
+							if (elem && (tmpElements[index] === doc || jet.comparePosition(tmpElements[index], elem) === 20)) {
+								if (jet.hasClass(elem, selectorSetting.classes)) {
+									elements.push(elem);
+								}
 							}
 						} else {
-							if (that.queue[0].progress == 0) {
-								// Start new queue, and setup
-								for (index in that.queue[0].to) {
-									that.unit[index] = new jUnit();
-									that.unit[index].setBase(that.element, index);
-
-									if (!that.unit[index].isColor) {
-										that.unit[index].calculateDiff(that.queue[0].to[index]);
-									}
+							if (selectorSetting.type == '.') {
+								if (doc.getElementsByClassName) {
+									elem = tmpElements[index].getElementsByClassName(selectorSetting.tag);
 								}
 							} else {
-								if (!jet.isEmpty(that.queue[0].to)) {
-									for (index in that.queue[0].to) {
-										if (that.unit[index].isColor) {
-											jet.css(that.element, index, 
-												that.diff[index].colorObj.diff(that.queue[0].to[index], jAnimate.easing[(jAnimate.easing[that.queue[0].easing]) ? that.queue[0].easing : 'linear'](
-													jAnimate.getPercentage(that.queue[0].frames, that.queue[0].progress)
-												)).toHex()
-											);
-										} else {
-											jet.css(that.element, index, that.unit[index].take(
-												jAnimate.easing[(jAnimate.easing[that.queue[0].easing]) ? that.queue[0].easing : 'linear'](
-													jAnimate.getPercentage(that.queue[0].frames, that.queue[0].progress)
-												)
-											));
-										}
+								if (selectorSetting.tag == 'body') {
+									if (tmpElements[index] == doc) {
+										elem = [doc.body];
+									} else {
+										elements = [];
+										break;
+									}
+								} else {
+									elem = tmpElements[index].getElementsByTagName(selectorSetting.tag);
+								}
+							}
+							for (eIndex = 0, eLength = elem.length; eIndex < eLength; eIndex++) {
+								if (jet.hasClass(elem[eIndex], selectorSetting.classes)) {
+									elements.push(elem[eIndex]);
+								}
+							}
+						}
+					}
+				}
+				index = 0;
+				while (elem = elements[index++]) {
+					elem.walked = false;
+				}
+				// Attribute Selector
+				if (selectorSetting.attribute.length > 0) {
+					tmpElements = elements;
+					elements = [];
+					for (index = 0, length = tmpElements.length; index < length; index++) {
+						eIndex = 0;
+						validPass = true;
+						while ((attr = selectorSetting.attribute[eIndex++])) {
+							if (attributeCache[attr]) {
+								matches = attributeCache[attr];
+							} else {
+								matches = attr.match(attributeRegex);
+								attributeCache[attr] = matches;
+							}
+							attributeSetting = {
+								attribute: matches[1],
+								operation: matches[3],
+								value: matches[6] || matches[8] || matches[9]
+							};
+							value = jet.attr(tmpElements[index], attributeSetting.attribute);
+							if (!attributeSetting.value) {
+								if (!value) {
+									validPass = false;
+									break;
+								}
+							} else {
+								if (attributeSetting.operation) {
+									attrOperator = {
+										'^': '^' + attributeSetting.value,
+										'$': attributeSetting.value + '$',
+										'*': attributeSetting.value,
+										'|': '^' + attributeSetting.value + '(\\-\\w+)*$',
+										'~': '\\b' + attributeSetting.value + '\\b'
+									};
+									if (!(new RegExp(attrOperator[attributeSetting.operation]))
+										.test(value)) {
+										validPass = false;
+										break;
+									}
+								} else {
+									if (value !== attributeSetting.value) {
+										validPass = false;
+										break;
 									}
 								}
 							}
-
-							if (that.queue[0].step) {
-								that.queue[0].step.call(that.element);
-							}
-
-							that.queue[0].progress++;
 						}
-
-						if (that.onPlaying) {
-							setTimeout(arguments.callee, jAnimate.getPitch());
+						if (validPass) {
+							elements.push(tmpElements[index]);
 						}
-					} else {
-						that.onPlaying = false;
 					}
-				}, 1);
+				}
+				// Pseudo Selector
+				if (selectorSetting.pseudo.length > 0) {
+					index = 0;
+					while ((pseudo = selectorSetting.pseudo[index++])) {
+						tmpElements = elements;
+						elements = [];
+						matches = pseudo.match(pseudoRegex);
+						movementSettingting = {
+							type: matches[1],
+							value: matches[3]
+						};
+						eIndex = 0;
+						if (movementSettingting.type === 'contains') {
+							while ((elem = tmpElements[eIndex++])) {
+								if ((elem.innerText || elem.textContent || '')
+									.indexOf(movementSettingting.value) > -1) {
+									elements.push(elem);
+								}
+							}
+						} else if (movementSettingting.type === 'only-child') {
+							while ((elem = tmpElements[eIndex++])) {
+								if (!jet.sibling(elem, 'next') && !jet.sibling(elem, 'previous')) {
+									elements.push(elem);
+								}
+							}
+						} else if (movementSettingting.type === 'first-child') {
+							while ((elem = tmpElements[eIndex++])) {
+								if (jet.childAt(elem.parentNode, 'first') === elem) {
+									elements.push(elem);
+								}
+							}
+						} else if (movementSettingting.type === 'last-child') {
+							while ((elem = tmpElements[eIndex++])) {
+								if (jet.childAt(elem.parentNode, 'last') === elem) {
+									elements.push(elem);
+								}
+							}
+						} else if (movementSettingting.type === 'not') {
+							while ((elem = tmpElements[eIndex++])) {
+								if (movementSettingting.value.substring(0, 1) === '.') {
+									if (!jet.hasClass(elem, [movementSettingting.value.substring(1)])) {
+										elements.push(elem);
+									}
+								} else if (movementSettingting.value.substring(0, 1) === '#') {
+									if (elem.id !== movementSettingting.value.substring(1)) {
+										elements.push(elem);
+									}
+								} else {
+									if (jCore.nodeName(elem, movementSettingting.value)) {
+										elements.push(elem);
+									}
+								}
+							}
+						} else if (movementSettingting.type.substring(0, 3) === 'nth') {
+							if (movementSettingting.value) movementSettingting.value = movementSettingting.value.replace(/^2n\+1$/, 'odd')
+								.replace(/^2n$/, 'even');
+							nth = nthRegex.exec(pseudo);
+							movement = (nth[2] === 'last') ? ['last', 'previous'] : ['first', 'next'];
+							isType = (nth[3] === 'of-type') ? true : false;
+							movementSetting = {
+								start: 0,
+								step: 1,
+								limit: -1
+							};
+							if (movementSettingting.value === 'n') {
+								elements = tmpElements;
+								continue;
+							} else if (movementSettingting.value === 'even') {
+								movementSetting.start = 1;
+								movementSetting.step = 2;
+							} else if (movementSettingting.value === 'odd') {
+								movementSetting.start = 0;
+								movementSetting.step = 2;
+							} else {
+								matches = movementSettingting.value.match(nthValueRegex);
+								if (!matches[3]) {
+									movementSetting.start = movementSetting.limit = parseInt(matches[2]) - 1;
+								} else {
+									movementSetting.step = (matches[4]) ? parseInt(matches[4]) : 1;
+									if (matches[1] === '-') {
+										movementSetting.limit = (matches[8]) ? parseInt(matches[8]) - 1 : 0;
+										movementSetting.start = movementSetting.limit % movementSetting.step;
+									} else {
+										movementSetting.start = (matches[8]) ? parseInt(matches[8]) - 1 : 0;
+									}
+								}
+							}
+							while ((elem = tmpElements[eIndex++])) {
+								prevEle = elem.parentNode;
+								prevEle.childExists = prevEle.childExists || {};
+								nodeName = elem.nodeName;
+								if (!prevEle.childExists[nodeName]) {
+									elem = jet.childAt(prevEle, movement[0]);
+									next = movementSetting.start;
+									while (elem && (movementSetting.limit === -1 || position <= movementSetting.limit)) {
+										if (!isType || (elem.nodeName === nodeName)) {
+											if (position === next) {
+												if (elem.nodeName === nodeName) {
+													elements[elements.length] = elem;
+												}
+												next += movementSetting.step;
+											}
+											position++;
+										}
+										elem = jet.sibling(elem, movement[1]);
+									}
+									prevEle.childExists[nodeName] = true;
+									prevList[prevList.length] = prevEle;
+									position = 0;
+								}
+							}
+							eIndex = 0;
+							while ((elem = prevList[eIndex++])) {
+								elem.childExists = {};
+							}
+						}
+					}
+				}
+				sibling = (jet.trim(blocks[8]) != ',') ? jet.trim(blocks[8]) : '';
+				if (blocks[8].indexOf(',') != -1) {
+					for (index = 0, length = elements.length; index < length; index++) {
+						if (!elements[index].added) {
+							jObj.add(elements[index]);
+							elements[index].added = true;
+						}
+					}
+					elements = [doc];
+				}
 			}
-			return this;
-		},
-
-		loop: function (value) {
-			this.playback = parseInt(value);
-			return this;
-		},
-
-		pause: function () {
-			this.onPlaying = false;
-			return this;
-		},
-
-		clear: function () {
-			this.pause();
-			this.quene = [];
-			this.diff = {};
+			if (elements.length > 0) {
+				for (index = 0, length = elements.length; index < length; index++) {
+					if (!jet.isDefined(elements[index].added) || !elements[index].added) {
+						jObj.add(elements[index]);
+					}
+				}
+			}
 		}
-	});
+		jObj.finalize();
+		return jObj;
+	}
+	// jet Color Object
+	function jColor(value) {
+		var self = {
+			R: 0,
+			G: 0,
+			B: 0,
+			A: 255,
+			subtract: function (value) {
+				var color = jColor(value);
+				jCore.each(['R', 'G', 'B'], function () {
+					self[this] -= color[this];
+					if (self[this] <= 0) self[this] = 0;
+				});
+				return self;
+			},
+			mix: function (value) {
+				var color = jColor(value);
+				jCore.each(['R', 'G', 'B'], function () {
+					self[this] += color[this];
+					if (self[this] > 255) self[this] = 255;
+				});
+				return self;
+			},
+			diff: function (value, percentage) {
+				var color = jColor(value);
+				percentage = parseFloat(percentage);
+				percentage = (percentage > 1) ? 1 : percentage;
+				jCore.each(['R', 'G', 'B'], function () {
+					if (self[this] > color[this]) {
+						color[this] = self[this] - Math.ceil((self[this] - color[this]) * percentage);
+					} else {
+						color[this] = self[this] + Math.ceil((color[this] - self[this]) * percentage);
+					}
+				});
 
-	// jDateTime date object
-	jDateTime = function () {
-		
+				return color;
+			},
+			toHex: function () {
+				var hex = '';
+				jCore.each(['R', 'G', 'B'], function () {
+					hex += ((self[this] < 16) ? '0' : '') + self[this].toString(16);
+				});
+				return '#' + hex;
+			},
+			toFullHex: function () {
+				var hex = '';
+				jCore.each(['R', 'G', 'B', 'A'], function () {
+					hex += ((self[this] < 16) ? '0' : '') + self[this].toString(16);
+				});
+				return '#' + hex;
+			}
+		};
+		if (jet.isString(value)) {
+			if (colorRegex.test(value) || hexRegex.test(value)) {
+				if (matches = hexRegex.exec(jet.trim(value))) {
+					self.R = parseInt(matches[1], 16);
+					self.G = parseInt(matches[2], 16);
+					self.B = parseInt(matches[3], 16);
+					if (matches[4]) {
+						self.A = parseInt(matches[4], 16);
+					}
+				} else if (matches = colorRegex.exec(jet.trim(value))) {
+					self.R = parseInt(matches[1], 10);
+					self.G = parseInt(matches[2], 10);
+					self.B = parseInt(matches[3], 10);
+				}
+			}
+		}
+		return self;
 	};
+	// jet Unit
 
-	// Weekday
-	function getWeekday(value) {
-		switch (value) {
-			case 'Sun': return 1;
-			case 'Mon': return 2;
-			case 'The': return 3;
-			case 'Wed': return 4;
-			case 'Thu': return 5;
-			case 'Fri': return 6;
-			case 'Sat': return 7;
-			default: return '';
-		}
-	}
-
-	function shortMonth(value) {
-		return fullMonth(value).slice(0, 3);
-	}
-
-	function fullMonth(value) {
-		switch (value) {
-			case 1: return 'January';
-			case 2: return 'February'
-			case 3: return 'March';
-			case 4: return 'April';
-			case 5: return 'May';
-			case 6: return 'June';
-			case 7: return 'July';
-			case 8: return 'August';
-			case 9: return 'September';
-			case 10: return 'October';
-			case 11: return 'November';
-			case 12: return 'December';
-			default: return '';
-		}
-	}
-
-	function fullWeekday(value) {
-		switch (value) {
-			case 0: return 'Sunday';
-			case 1: return 'Monday';
-			case 2: return 'Theuday';
-			case 3: return 'Wednesday';
-			case 4: return 'Thursday';
-			case 5: return 'Friday';
-			case 6: return 'Saturday';
-			default: return '';
-		}
-	}
-
-	function shortWeekday(value) {
-		return fullWeekday(value).slice(0, 3);
-	}
-
-	jCore.extend(jDateTime.prototype, {
-		date: null,
-		year: 0,
-		month: 0,
-		day: 0,
-		time: null,
-
-		parseTime: function (value) {
-			var delimited, subValue, time = {};
-
-			delimited = value.split(':');
-			if (delimited.length === 3) {
-				time.hour = parseInt(delimited[0]);
-				time.minute = parseInt(delimited[1]);
-
-				if (delimited[2].indexOf('.') !== -1) {
-					subValue = delimited[2].split('.');
-					time.second = parseInt(subValue[0]);
-					time.millis = parseInt(subValue[1]);
-				} else {
-					time.second = parseInt(delimited[2]);
-					time.millis = 0;
-				}
-
-				return time;
-			} else {
-				return {hour : 0, minute : 0, second : 0, millis : 0};
-			}
-		},
-
-		parseDate: function (value) {
-			var dateString,
-			delimited,
-			subValue;
-
-			if (jCore.isNumeric(value)) {
-				return this.parseDate(new Date(value));
-			} else if (jCore.isFunction(value.getFullYear)) {
-				this.date = value;
-				this.year = this.date.getFullYear();
-				this.month = this.date.getMonth() + 1;
-				this.day = this.date.getDate();
-				this.time = {
-					hour: this.date.getHours(),
-					minute: this.date.getMinutes(),
-					second: this.date.getSeconds(),
-					millis: this.date.getMilliseconds()
-				};
-
-				return this;
-	        } else if (matches = timestampRegex.exec(value)) {
-				// 2014-03-25T08:48:21Z or 2014-03-25T08:48:21+08:00
-				this.year = parseInt(matches[1]);
-				this.month = parseInt(matches[2]);
-				this.day = parseInt(matches[3]);
-				this.time = {
-					hour: parseInt(matches[4]),
-					minute: parseInt(matches[5]),
-					second: parseInt(matches[6]),
-					millis: 0
-				};
-			} else if (jCore.isString(value)) {
-				dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
-				delimited = dateString.split(' ');
-				switch (delimited.length) {
-					case 3:
-						// 2014-03-25 08:48:21.125 or 2014/03/25 08:48:21.125
-						if (delimited[0].indexOf('/') !== -1) {
-							subValue = delimited[0].split('/');
-						} else {
-							subValue = delimited[0].split('.');
-						}
-						this.month = parseInt(subValue[0]);
-						this.day = parseInt(subValue[1]);
-						this.year = parseInt(subValue[2]);
-						this.time = this.parseTime(delimited[1]);
-					case 6:
-						// Tue Mar 25 2014 08:48:21 GMT+0800
-						this.month = getWeekday(delimited[1]);
-						this.day = parseInt(delimited[2]);
-						this.year = parseInt(delimited[3]);
-						this.time = this.parseTime(delimited[4]);
-					break;
+	function jUnit(elem, prop) {
+		var propValue, parentEle, matches, color, self = {
+				diff: null,
+				pixel: null,
+				property: '',
+				parentPx: null,
+				hasUnit: false,
+				toPixel: function (value, unit, parent) {
+					if (jet.isObject(self.pixel)) {
+						return 0;
+					}
+					value = parseFloat(value);
+					switch (unit) {
+					case '%':
+						if (!jet.isDefined(parent)) return 0;
+						return parent * (value / 100);
+					case 'em':
+						if (!jet.isDefined(parent)) return 0;
+						return parent * value;
+					case 'px':
+						return value;
+					case 'in':
+						return Math.round(parseFloat(value) * 96);
+					case 'pt':
+						return Math.round(parseFloat(value, 10) * 96 / 72);
+					case 'pc':
+						return Math.round(parseFloat(value, 10) * 96 / 6);
+					case 'cm':
+						return Math.round(parseFloat(value) * 96 / 2.54);
+					case 'cm':
+						return Math.round(parseFloat(value) * 96 / 25.4);
 					default:
-						// Not matched
+						return value;
+					}
+				},
+				convertByUnit: function (unit) {
+					if (jet.isObject(self.pixel)) {
+						return 0;
+					}
+					switch (unit) {
+					case '%':
+						return (self.pixel / self.parentPx) * 100;
+					case 'em':
+						return self.pixel / self.parentPx;
+					case 'px':
+						return self.pixel;
+					case 'in':
+						return self.pixel / 96;
+					case 'pt':
+						return self.pixel / 96 * 72;
+					case 'pc':
+						return self.pixel / 96 * 6;
+					case 'cm':
+						return self.pixel / 96 * 2.54;
+					case 'mm':
+						return self.pixel / 96 * 25.4;
+					default:
+						return self.pixel;
+					}
+				},
+				calculateDiff: function (value) {
+					var val;
+					if (jUnitHooks[self.property] && jUnitHooks[self.property].calculateDiff) {
+						return jUnitHooks[self.property].calculateDiff.call(self, value);
+					}
+					if ((matches = unitRegex.exec(value)) !== null) {
+						if (matches[2]) {
+							switch (matches[2].toLowerCase()) {
+							case '%':
+								self.diff = Math.round(self.pixel * ((parseFloat(matches[1]) / 100))) - self.pixel;
+								break;
+							case 'em':
+								self.diff = Math.round(self.parentPx * parseFloat(matches[1])) - self.pixel;
+								break;
+							default:
+								val = self.convertByUnit(matches[2]);
+								self.diff = (val < 0) ? parseFloat(matches[1]) - (-val) : parseFloat(matches[1]) - val;
+								break;
+							}
+						} else {
+							self.diff = (self.pixel < 0) ? parseFloat(matches[1]) - (-self.pixel) : parseFloat(matches[1]) - self.pixel;
+						}
+					}
+					return self;
+				},
+				take: function (percentage) {
+					if (jUnitHooks[self.property] && jUnitHooks[self.property].take) {
+						return jUnitHooks[self.property].take.call(self, percentage);
+					}
+					return (self.pixel + (self.diff * percentage)) + (self.hasUnit ? 'px' : '');
+				}
+			};
+
+		if (jet.isElement(elem) && jet.isDefined(prop)) {
+			self.property = prop;
+			propValue = jet.css(elem, prop);
+			if (jUnitHooks[prop] && jUnitHooks[prop].init) {
+				return jUnitHooks[prop].init.call(self, propValue, elem);
+			}
+			if (jet.isDefined(propValue)) {
+				// Obtain parent element's prop value in pixel
+				parentEle = jet(elem).parent();
+				if (jet.isDefined(parentEle)) {
+					if ((matches = unitRegex.exec(parentEle.css(prop))) !== null) {
+						self.parentPx = parseInt(matches[1]);
+					}
+				}
+				if ((matches = unitRegex.exec(propValue)) !== null) {
+					if (matches[2]) {
+						self.hasUnit = true;
+						self.pixel = self.toPixel(matches[1], matches[2].toLowerCase(), self.parentPx);
+					} else {
+						self.pixel = parseFloat(matches[1]);
+					}
 				}
 			}
+		}
+		return self;
+	};
+	// Animation
 
-			this.date = new Date(this.year, this.month, this.day, this.time.hour, this.time.minute, this.time.second, this.time.millis);
-
-			return this;
-		},
-
-		toString: function (format) {
-			var datestring = format, value, d = this.date;
-			return datestring.replace(dateformatRegex, function (str, pattern, offset, org) {
-				switch (pattern) {
-					case 'yyyy':
-					case 'yyy':
-						return d.getFullYear().toString();
-					case 'yy':
-						return d.getFullYear().toString().slice(-2);
-					case 'y':
-						return d.getFullYear().toString().slice(-1);
-					case 'MMMM':
-						return fullMonth(d.getMonth() + 1);
-					case 'MMM':
-						return shortMonth(d.getMonth() + 1);
-					case 'MM':
-						value = d.getMonth() + 1;
-						return (value < 10) ? '0' + value : value;
-					case 'M':
-						return (d.getMonth() + 1);
-					case 'dddd':
-						return fullWeekday(d.getDay());
-					case 'ddd':
-						return shortWeekday(d.getDay());
-					case 'dd':
-						value = d.getDate() + 1;
-						return (value < 10) ? '0' + value : value;
-					case 'd':
-						return (d.getDate() + 1);
-					case 'HH':
-						value = d.getHours();
-						return (value < 10) ? '0' + value : value;
-					case 'H':
-						return d.getHours();
-					case 'hh':
-						value = d.getHours();
-						if (value > 12) {
-							value -= 12;
+	function jAnimate(element) {
+		// Reset reference object
+		var queue = [],
+			unit = {},
+			onPlaying = false,
+			environmentFPS = 60,
+			speed = 1,
+			acceptedProp = /^scroll(Left|Top)|width|height|left|top|right|bottom|opacity|fontSize|color|backgroundColor|border((Left|Right|Top|Bottom)?Width)|lineHeight|padding(Left|Right|Top|Bottom)?|margin(Left|Right|Top|Bottom)?$/,
+			self = {
+				apply: function (prop, duration, easing, callbackObj) {
+					var index, propAllowed = {},
+						porperty;
+					if (jet.isPlainObject(prop)) {
+						for (index in prop) {
+							if (acceptedProp.test(jet.camelCase(index))) {
+								propAllowed[index] = prop[index];
+							}
 						}
-						return (value < 10) ? '0' + value : value;
-					case 'h':
-						value = d.getHours();
-						return (value > 12) ? value - 12 : value;
-					case 'mm':
-						value = d.getMinutes();
-						return (value < 10) ? '0' + value : value;
-					case 'm':
-						return d.getMinutes();
-					case 'ss':
-						value = d.getSeconds();
-						return (value < 10) ? '0' + value : value;
-					case 's':
-						return d.getSeconds();
-					case 'tt':
-						return (d.getHours() >= 12) ? 'PM' : 'AM';
-					case 't':
-						return (d.getHours() >= 12) ? 'P' : 'A';
-					case 'FFF':
-						return d.getMilliseconds().toString().replace(/0+$/, '');
-					case 'FF':
-						return d.getMilliseconds().toString().slice(0, 2).replace(/0+$/, '') || '0';
-					case 'F':
-						return d.getMilliseconds().toString().slice(0, 1).replace(/0+$/, '') || '0';
-					case 'fff':
-						value = d.getMilliseconds().toString();
-						return '000'.substring(0, '000'.length - value.length) + value;
-					case 'ff':
-						value = d.getMilliseconds().toString().slice(0, 2);
-						return (value.length === 1) ? value + '0' : value;
-					case 'f':
-						return d.getMilliseconds().toString().slice(0, 1);
+						porperty = {
+							to: propAllowed,
+							progress: 0,
+							frames: Math.ceil(duration / (1000 / environmentFPS)),
+							step: null,
+							complete: null,
+							easing: easing
+						};
+						if (jet.isPlainObject(callbackObj)) {
+							if (jet.isFunction(callbackObj.step)) {
+								porperty.step = callbackObj.step;
+							}
+							if (jet.isFunction(callbackObj.complete)) {
+								porperty.complete = callbackObj.complete;
+							}
+						}
+						queue.push(porperty);
+					}
+					return self;
+				},
+				wait: function (duration, callbackself) {
+					self.apply({}, duration, 'Linear', callbackself);
+					return self;
+				},
+				play: function () {
+					if (!onPlaying) {
+						onPlaying = true;
+						setTimeout(function () {
+							var index, pc;
+							if (queue.length > 0) {
+								if (queue[0].progress === queue[0].frames) {
+									queue[0].progress = 0;
+									for (index in queue[0].to) {
+										jet.css(element, index, queue[0].to[index]);
+									}
+									unit = {};
+									if (queue[0].complete) {
+										queue[0].complete.call(element);
+									}
+									queue = queue.slice(1);
+									if (queue.length === 0) {
+										onPlaying = false;
+										return;
+									}
+								} else {
+									if (queue[0].progress === 0) {
+										// Start new queue, and setup
+										for (index in queue[0].to) {
+											unit[index] = jUnit(element, index);
+											unit[index].calculateDiff(queue[0].to[index]);
+										}
+									} else {
+										if (!jet.isEmpty(queue[0].to)) {
+											for (index in queue[0].to) {
+												pc = (easingType[queue[0].easing] || easingType.linear)(queue[0].progress / (queue[0].frames || 1));
+												jet.css(element, index, unit[index].take(pc));
+											}
+										}
+									}
+									if (queue[0].step) {
+										queue[0].step.call(element);
+									}
+									queue[0].progress++;
+								}
+								if (onPlaying) {
+									setTimeout(arguments.callee, Math.ceil(1000 / (environmentFPS * speed)) || 1);
+								}
+							} else {
+								onPlaying = false;
+							}
+						}, 1);
+					}
+					return self;
+				},
+				wait: function (duration, callbackself) {
+					self.apply({}, duration, 'Linear', callbackself);
+					return self;
+				},
+				pause: function () {
+					onPlaying = false;
+					return self;
+				},
+				clear: function () {
+					pause();
+					quene = [];
+					diff = {};
+					return self;
 				}
-				return datestring;
+			};
+
+		function setSpeed(value) {
+			speed = parseFloat(value);
+			if (speed <= 0) {
+				speed = 1;
+			}
+		}
+
+		if (jet.isElement(element)) {
+			this.element = element;
+		}
+		return self;
+	};
+	// jDeferred Callback Stack object
+	function Stack(options) {
+		var queue = [],
+			cachedOptions = {},
+			delimited = null,
+			memory = null,
+			self = {
+				add: function () {
+					var index = 0,
+						length = arguments.length;
+					for (; index < length; index++) {
+						if (jCore.isFunction(arguments[index]) && (!cachedOptions.unique || !jCore.inArray(queue, arguments[index]))) {
+							if (memory) {
+								arguments[index].apply(this, memory);
+							} else {
+								queue.push(arguments[index]);
+							}
+						} else if (jCore.isArray(arguments[index])) {
+							self.add.apply(this, arguments[index]);
+						}
+					}
+					return this;
+				},
+				remove: function () {},
+				fire: function () {
+					self.fireWith(this, arguments);
+					return this;
+				},
+				fireWith: function (reference, args) {
+					var index = 0, callback;
+					memory = args || [];
+					memory = (memory.slice) ? memory.slice() : memory;
+
+					if (!cachedOptions.stack) {
+						while (callback = queue[index++]) {
+							callback.apply(reference, memory);
+						}
+					} else if (cachedOptions.stack) {
+						if (queue.length) {
+							queue.shift().apply(reference, memory);
+						}
+					}
+					return this;
+				},
+				above: function () {
+					queue = [];
+					return this;
+				}
+			};
+		if (jCore.isString(options)) {
+			delimited = options.split(' ');
+			jCore.each(delimited, function () {
+				cachedOptions[this] = true;
 			});
 		}
+		if (cachedOptions.each) {
+			stack = jCore.clone(queue);
+		}
+		return self;
+	};
+
+	// Define jet object class
+	jet.extend({
+		// - jet.Deferred(obj)
+		// Create defer uses to invoke callbacks in queue or relay the success or failure state of any synchronous or asynchronous function.
+		// @param {jDeferred} obj Extend the current jDeferred object to new jDeferred object
+		// @param {Function} obj The callback function that will be execute after deferred
+		// @return {jDeferred}
+		// @added 1.0.4-Beta
+		// - 
+		Deferred: function (obj) {
+			var actions = [
+					['done', 'resolve', Stack('stack')],
+					['fail', 'reject', Stack('stack')],
+					['step', 'process', Stack('')]
+				],
+				detached = {
+					always: function () {
+						deferred.done(arguments).fail(arguments).step(arguments);
+						return this;
+					},
+					then: function (/* done, fail, step */) {
+						var args = arguments;
+						return jet.Deferred(function (ref) {
+							jCore.each(actions, function (i, action) {
+								deferred[action[0]](function () {
+									var result = args[i] && args[i].apply(this, arguments);
+									if (result && jet.isFunction(result.detach)) {
+										// If callback returns deferred object, queue the current deferred object
+										result.detach().done(ref.resolve).fail(ref.reject).step(ref.process);
+									} else {
+										ref.resolveWith(ref.detach, result);
+									}
+								});
+							});
+						}).detach();
+					},
+					detach: function (obj) {
+						return (obj != null) ? jCore.extend(obj, this) : detached;
+					}
+				}, deferred = {};
+			jCore.each(actions, function () {
+				detached[this[0]] = this[2].add;
+				// Only non-detach deferred object can be fired.
+				deferred[this[1]] = this[2].fire;
+				deferred[this[1] + 'With'] = this[2].fireWith;
+			});
+
+			// If detached
+			// > done, fail, notify, always, then, detach, resolve, resolveWith, reject and rejectWith
+			// else
+			// > done, fail, notify, always, then, detach
+			detached.detach(deferred);
+
+			if (jet.isFunction(obj)) {
+				obj.call(deferred, deferred);
+			}
+			return deferred;
+		},
+
+		// - jet.when()
+		// Provides a way to execute callback functions based on one or more objects, usually Deferred objects that represent asynchronous events.
+		// @return {jDeferred}
+		// @added 1.0.4-Beta
+		// - 
+		when: function () {
+			var deferred = jet.Deferred(),
+				valuesSet = [
+					// Resolve
+					Array.prototype.slice.call(arguments)
+				],
+				length = valuesSet[0].length,
+				deferredSet = [
+					// Resolve
+					new Array(length),
+					// Process
+					new Array(length)
+				],
+				remaining = length;
+			// Process Values
+			valuesSet.push(new Array(length));
+
+			jet.each(valuesSet[0], function (i, def) {
+				if (def !== null && jet.isFunction(def.detach)) { // Check object is deferred object
+					jCore.each(['done', 'step'], function (set, method) {
+						def[method](function (values) {
+							deferredSet[set][i] = def;
+							valuesSet[set][i] = (arguments.length > 1) ? Array.prototype.slice.call(arguments) : values;
+							if (set) {
+								deferred.processWith(deferredSet[set], valuesSet[set]);
+							} else if (!(--remaining)) {
+								deferred.resolveWith(deferredSet[set], valuesSet[set]);
+							}
+						});
+					});
+					def.fail(deferred.reject);
+				} else {
+					remaining--;
+				}
+			});
+
+			// No more deferred object need resolve, resolve the main deferred object
+			if (!remaining) {
+				deferred.resolveWith(resolveDeferred, resolveValues);
+			}
+
+			return deferred.detach();
+		},
+		
+		// - jet.DateTime(value)
+		// Parse the datetime from datetime object of string. Return jDateTime.
+		// @param {String} value The string that will be parsed to jDateTime.
+		// @param {DateTime} value The DateTime object that will be parsed to jDateTime.
+		// @param {Number} value The number that will be parsed to jDateTime.
+		// @return {jDateTime}
+		// @added 1.0.3-Beta
+		// - 
+		DateTime: function (value) {
+			var date = null,
+				year = 0,
+				month = 0,
+				day = 0,
+				time = {},
+				self = {
+					parseTime: function (value) {
+						var delimited, subValue;
+						delimited = value.split(':');
+						time = {};
+						if (delimited.length === 3) {
+							time.hour = parseInt(delimited[0]);
+							time.minute = parseInt(delimited[1]);
+							if (delimited[2].indexOf('.') !== -1) {
+								subValue = delimited[2].split('.');
+								time.second = parseInt(subValue[0]);
+								time.millis = parseInt(subValue[1]);
+							} else {
+								time.second = parseInt(delimited[2]);
+								time.millis = 0;
+							}
+							return self;
+						} else {
+							time = {
+								hour: 0,
+								minute: 0,
+								second: 0,
+								millis: 0
+							};
+							return self;
+						}
+					},
+					parseDate: function (value) {
+						var dateString, delimited, subValue;
+						if (jCore.isNumeric(value)) {
+							return self.parseDate(new Date(value));
+						} else if (jCore.isFunction(value.getFullYear)) {
+							date = value;
+							year = date.getFullYear();
+							month = date.getMonth() + 1;
+							day = date.getDate();
+							time = {
+								hour: date.getHours(),
+								minute: date.getMinutes(),
+								second: date.getSeconds(),
+								millis: date.getMilliseconds()
+							};
+							return self;
+						} else if (matches = timestampRegex.exec(value)) {
+							// 2014-03-25T08:48:21Z or 2014-03-25T08:48:21+08:00
+							year = parseInt(matches[1]);
+							month = parseInt(matches[2]);
+							day = parseInt(matches[3]);
+							time = {
+								hour: parseInt(matches[4]),
+								minute: parseInt(matches[5]),
+								second: parseInt(matches[6]),
+								millis: 0
+							};
+						} else if (jCore.isString(value)) {
+							dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
+							delimited = dateString.split(' ');
+							switch (delimited.length) {
+							case 3:
+								// 2014-03-25 08:48:21.125 or 2014/03/25 08:48:21.125
+								if (delimited[0].indexOf('/') !== -1) {
+									subValue = delimited[0].split('/');
+								} else {
+									subValue = delimited[0].split('.');
+								}
+								month = parseInt(subValue[0]);
+								day = parseInt(subValue[1]);
+								year = parseInt(subValue[2]);
+								time = self.parseTime(delimited[1]);
+							case 6:
+								// Tue Mar 25 2014 08:48:21 GMT+0800
+								month = weekdayMap[delimited[1]] || '';
+								day = parseInt(delimited[2]);
+								year = parseInt(delimited[3]);
+								time = self.parseTime(delimited[4]);
+								break;
+							default:
+								// Not matched
+							}
+						}
+						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
+						return self;
+					},
+					toString: function (format) {
+						var datestring = format,
+							value;
+						return datestring.replace(dateformatRegex, function (str, pattern, offset, org) {
+							switch (pattern) {
+							case 'yyyy':
+							case 'yyy':
+								return date.getFullYear()
+									.toString();
+							case 'yy':
+								return date.getFullYear()
+									.toString()
+									.slice(-2);
+							case 'y':
+								return date.getFullYear()
+									.toString()
+									.slice(-1);
+							case 'MMMM':
+								return monthString[date.getMonth() + 1] || '';
+							case 'MMM':
+								return monthString[date.getMonth() + 1].slice(0, 3) || '';
+							case 'MM':
+								value = date.getMonth() + 1;
+								return (value < 10) ? '0' + value : value;
+							case 'M':
+								return (date.getMonth() + 1);
+							case 'dddd':
+								return weekdayString[date.getDay() + 1] || '';
+							case 'ddd':
+								return weekdayString[date.getDay() + 1].slice(0, 3) || '';
+							case 'dd':
+								value = date.getDate() + 1;
+								return (value < 10) ? '0' + value : value;
+							case 'd':
+								return (date.getDate() + 1);
+							case 'HH':
+								value = date.getHours();
+								return (value < 10) ? '0' + value : value;
+							case 'H':
+								return date.getHours();
+							case 'hh':
+								value = date.getHours();
+								if (value > 12) {
+									value -= 12;
+								}
+								return (value < 10) ? '0' + value : value;
+							case 'h':
+								value = date.getHours();
+								return (value > 12) ? value - 12 : value;
+							case 'mm':
+								value = date.getMinutes();
+								return (value < 10) ? '0' + value : value;
+							case 'm':
+								return date.getMinutes();
+							case 'ss':
+								value = date.getSeconds();
+								return (value < 10) ? '0' + value : value;
+							case 's':
+								return date.getSeconds();
+							case 'tt':
+								return (date.getHours() >= 12) ? 'PM' : 'AM';
+							case 't':
+								return (date.getHours() >= 12) ? 'P' : 'A';
+							case 'FFF':
+								return date.getMilliseconds()
+									.toString()
+									.replace(/0+$/, '');
+							case 'FF':
+								return date.getMilliseconds()
+									.toString()
+									.slice(0, 2)
+									.replace(/0+$/, '') || '0';
+							case 'F':
+								return date.getMilliseconds()
+									.toString()
+									.slice(0, 1)
+									.replace(/0+$/, '') || '0';
+							case 'fff':
+								value = date.getMilliseconds()
+									.toString();
+								return '000'.substring(0, '000'.length - value.length) + value;
+							case 'ff':
+								value = date.getMilliseconds()
+									.toString()
+									.slice(0, 2);
+								return (value.length === 1) ? value + '0' : value;
+							case 'f':
+								return date.getMilliseconds()
+									.toString()
+									.slice(0, 1);
+							}
+							return datestring;
+						});
+					}
+				};
+			self.parseDate(value);
+			return self;
+		}
 	});
-
 	win.jet = jet;
-
 	//register css: Hooks
 	jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
 		jet.registerCSSHook(css, function (obj, prop, value) {
-			var setValue = 0, elem;
+			var setValue = 0,
+				elem;
 			if (jet.isDefined(value)) {
 				jet.each(obj, function () {
 					if (jet.isElement(this)) {
@@ -3643,7 +3422,6 @@
 						jet.prop(this, prop, setValue);
 					}
 				});
-	
 				return this;
 			} else {
 				elem = obj[0];
@@ -3654,22 +3432,19 @@
 			}
 		});
 	});
-
 	//	register Prop: Hooks
-
 	//	register Value: Hooks
 	jet.registerValueHook('select', function (element, value) {
-		var returns = [], valueMap = {};
+		var returns = [],
+			valueMap = {};
 		if (jet.isDefined(value)) {
 			if (jet.isString(value)) {
 				value = [value];
 			}
-
 			if (jet.isArray(value)) {
 				jet.each(value, function () {
 					valueMap[this] = true;
 				});
-
 				jet.each(element.options, function () {
 					if (valueMap[this.value]) {
 						this.selected = true;
@@ -3692,14 +3467,12 @@
 			}
 		}
 	});
-
 	jCore.each(['checkbox', 'radio'], function () {
 		jet.registerValueHook(this, function (element, value) {
 			if (jet.isDefined(value)) {
 				if (jet.isString(value)) {
 					value = [value];
 				}
-	
 				element.checked = jet.inArray(value, element.value);
 				return this;
 			} else {
@@ -3714,73 +3487,62 @@
 			}
 		});
 	});
-
 	// Register jUnit Hooks
+	jCore.each(['backgroundColor', 'color'], function () {
+		jet.registerUnitHook(this, {
+			take: function (percentage) {
+				return this.pixel.diff(this.diff, percentage)
+					.toHex;
+			},
+			calculateDiff: function (value) {
+				this.diff = jColor(value);
+				return this;
+			},
+			init: function (value, element) {
+				this.pixel = jColor(value);
+				return this;
+			}
+		});
+	});
 	jCore.each(['padding', 'margin'], function () {
 		jet.registerUnitHook(this, {
 			take: function (percentage) {
-				var ref = this, val = [];
+				var ref = this,
+					val = [];
 				jet.each(this.pixel, function (i, value) {
 					val[i] = (ref.pixel[i] + (ref.diff[i] * percentage)) + 'px';
 				});
 				return val.join(' ');
 			},
-
-			setBase: function (value, element) {
+			init: function (value, element) {
 				var valueSet, ref = this;
-
-				// IE	fix: No margin value
-				if (!value) {
-					valueSet = [jet.css(element, 'margin-top'), jet.css(element, 'margin-right'), jet.css(element, 'margin-bottom'), jet.css(element, 'margin-left')];
-				} else {
-					valueSet = value.split(' ');
-				}
-
+				// IE fix: Get the value from marginTop, marginLeft, marginBottom, marginRight instead of margin
+				valueSet = [jet.css(element, 'margin-top'), jet.css(element, 'margin-right'), jet.css(element, 'margin-bottom'), jet.css(element, 'margin-left')];
 				this.pixel = [];
 				jet.each(valueSet, function (i, propValue) {
 					if ((matches = unitRegex.exec(propValue)) !== null) {
-						if (matches[2]) {
-							ref.pixel[i] = ref.convertToPx(parseFloat(matches[1]), matches[2].toLowerCase(), ref.parentPx);
-						} else {
-							ref.pixel[i] = parseFloat(matches[1]);
-						}
+						ref.pixel[i] = ref.toPixel(parseFloat(matches[1]), matches[2], ref.parentPx);
 					}
 				});
-
 				return this;
 			},
-
 			calculateDiff: function (value) {
-				var valueSet = value.split(' '), val = [], target = [], ref = this;
+				var valueSet = value.split(' '),
+					val = [],
+					target = [],
+					ref = this;
 
-				if (this.pixel.length < valueSet.length) {
-					if (this.pixel.length === 1) {
-						if (valueSet.length === 2) {
-							val[0] = val[1] = this.pixel[0];
-						} else if (valueSet.length === 4) {
-							val[0] = val[1] = val[2] = val[3] = this.pixel[0];
-						}
-					} else if (this.pixel.length === 2) {
-						val[0] = val[1] = this.pixel[0];
-						val[2] = val[3] = this.pixel[1];
-					}
-					this.pixel = val;
-					target = valueSet;
-				} else if (this.pixel.length == valueSet.length) {
-					target = valueSet;
-				} else {
-					if (valueSet.length === 1) {
-						if (this.pixel.length === 2) {
-							target[0] = target[1] = valueSet[0];
-						} else if (this.pixel.length === 4) {
-							target[0] = target[1] = target[2] = target[3] = valueSet[0];
-						}
-					} else if (valueSet.length === 2) {
+				if (valueSet.length === 1) {
+					if (this.pixel.length === 2) {
 						target[0] = target[1] = valueSet[0];
-						target[2] = target[3] = valueSet[1];
-					} else {
-						target = valueSet;
+					} else if (this.pixel.length === 4) {
+						target[0] = target[1] = target[2] = target[3] = valueSet[0];
 					}
+				} else if (valueSet.length === 2) {
+					target[0] = target[1] = valueSet[0];
+					target[2] = target[3] = valueSet[1];
+				} else {
+					target = valueSet;
 				}
 
 				this.diff = [];
@@ -3788,23 +3550,20 @@
 					var targetVal = target[i];
 					if ((matches = unitRegex.exec(targetVal)) !== null) {
 						if (matches[2]) {
-							ref.diff[i] = ref.convertToPx(parseFloat(matches[1]), matches[2].toLowerCase(), ref.parentPx) - propValue;
+							ref.diff[i] = ref.toPixel(parseFloat(matches[1]), matches[2].toLowerCase(), ref.parentPx) - propValue;
 						} else {
 							ref.diff[i] = parseFloat(matches[1]) - propValue;
 						}
 					}
 				});
-
 				return this;
 			}
 		});
 	});
-
 	// Setup Onload Event
 	jCore.domReady();
-
 	if (jCore.isDefined(win.define) && jCore.isFunction(define) && define.amd) {
-		define('jet', [], function() {
+		define('jet', [], function () {
 			return jet;
 		});
 	}
