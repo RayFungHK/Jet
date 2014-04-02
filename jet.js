@@ -64,12 +64,6 @@
 		nav = navigator,
 		iframe = null,
 		defaultStyles = {},
-		// Define Browser
-		isChrome = /Chrome/.test(nav.userAgent),
-		isSafari = /Apple.*Safari/.test(nav.vendor),
-		isOpera = !! win.opera || nav.userAgent.indexOf(' OPR/') >= 0,
-		isFirefox = /Firefox/.test(nav.userAgent),
-		isIE = /MSIE/.test(nav.userAgent),
 		attrMapping = {
 			'accesskey': 'accessKey',
 			'class': 'className',
@@ -131,35 +125,33 @@
 				return (Math.cos(((1 - percent) / 2) * Math.PI));
 			}
 		},
+		// Array slice function
+		slice = Array.prototype.slice,
 		// Jet Object
 		jCore, // Internal Module
+		jCoreClone,
 		jObject, // Jet Object
-		jCSSHooks = {},
-		// Jet CSS hook
-		jValueHooks = {},
-		// Jet Value hook
-		jPropHooks = {},
-		// Jet Prop hook
-		jUnitHooks = {},
-		// Jet Unit hook
+		jCSSHooks = {}, // Jet CSS hook
+		jValueHooks = {}, // Jet Value hook
+		jPropHooks = {}, // Jet Prop hook
+		jUnitHooks = {}, // Jet Unit hook
 		// Binding
 		propBinding = {
 			'for': 'htmlFor',
 			'class': 'className'
 		},
 		objMethod = Object.prototype,
-		container = doc.createElement('div');
+		container = doc.createElement('div'),
+		onLoadEvent = [];
 	// Internal Use
 	jCore = {
-		onLoadEvent: [],
-		readyOnLoad: function () {
-			var index = 0,
-				callback;
-			while (callback = jCore.onLoadEvent[index++]) {
-				callback.call(this);
-			}
-			jCore.onLoadEvent = [];
-		},
+		// Define Browser
+		isChrome: /Chrome/.test(nav.userAgent),
+		isSafari: /Apple.*Safari/.test(nav.vendor),
+		isOpera: !! win.opera || nav.userAgent.indexOf(' OPR/') >= 0,
+		isFirefox: /Firefox/.test(nav.userAgent),
+		isIE: /MSIE/.test(nav.userAgent),
+
 		extend: function (objA, objB, inherit) {
 			var name = '', objA = objA || {};
 			if (jCore.isObject(objB)) {
@@ -227,6 +219,24 @@
 			}
 			return true;
 		},
+		filter: function (objects, callback) {
+			var index = 0, length = 0;
+			if (jCore.detect(callback) === 'Function') {
+				if (objects.length === 1) {
+					if (!callback.call(this, objects[0])) {
+						return false;
+					}
+				} else {
+					length = objects.length;
+					for (; index < length; index++) {
+						if (!callback.call(this, objects[index])) {
+							return false;
+						}
+					}
+				}
+			}
+			return true;
+		},
 		// - jet.detect(obj)
 		// Return the type of object 
 		// @param {Object} obj The object for detection.
@@ -237,130 +247,145 @@
 				.split(' ')[1];
 			return (text.substring(0, text.length - 1));
 		},
-		// - jet.isWalkable(obj)
-		// Check to see if an object can be Iterated. 
-		// @param {Object} obj The object that will be checked to see if it can be Iterated.
+		// - jet.isWalkable([arguments, ...])
+		// Check to see if one or more object can be Iterated. 
 		// @return {Boolean}
 		// -
-		isWalkable: function (obj) {
-			return (jCore.isCollection(obj) || jCore.isPlainObject(obj));
+		isWalkable: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.isCollection(obj) || jCore.isPlainObject(obj));
+			});
 		},
-		// - jet.isJetObject(obj)
-		// Check to see if an object is a jet object. 
-		// @param {Object} obj The object that will be checked to see if it's a jet object.
+		// - jet.isJetObject([arguments, ...])
+		// Check to see if one or more object is a jet object. 
 		// @return {Boolean}
 		// -
-		isJetObject: function (obj) {
-			return (jCore.isDefined(obj) && obj.constructor === jObject);
+		isJetObject: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.isDefined(obj) && obj.constructor === jObject);
+			});
 		},
-		// - jet.isCollection(obj)
-		// Check to see if an object is a collection or an array. 
-		// @param {Object} obj The object that will be checked to see if it's a collection or an array.
+		// - jet.isCollection([arguments, ...])
+		// Check to see if one or more object is a collection or an array. 
 		// @return {Boolean}
 		// -
-		isCollection: function (obj) {
-			return (jCore.isDefined(obj) && (jCore.isArray(obj) || jCore.isJetObject(obj) || (jCore.isNumeric(obj.length) && jCore.isFunction(obj.item))));
+		isCollection: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.isDefined(obj) && (jCore.isArray(obj) || jCore.isJetObject(obj) || (jCore.isNumeric(obj.length) && jCore.isFunction(obj.item))));
+			});
 		},
-		// - jet.isDefined(obj)
-		// Check to see if an object is defined. 
-		// @param {Object} obj The object that will be checked to see if it's defined.
+		// - jet.isDefined([arguments, ...])
+		// Check to see if one or more object is defined. 
 		// @return {Boolean}
 		// - 
-		isDefined: function (obj) {
-			return (typeof obj !== 'undefined');
+		isDefined: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (typeof obj !== 'undefined');
+			});
 		},
-		// - jet.isElement(obj)
-		// Check to see if an object is an element object. 
-		// @param {Object} obj The object that will be checked to see if it's an element object.
+		// - jet.isElement([arguments, ...])
+		// Check to see if one or more object is an element object. 
 		// @return {Boolean}
 		// - 
-		isElement: function (obj) {
-			return (jCore.isDefined(obj) && (obj.nodeType === 1 || obj.nodeType === 11 || obj.nodeType === 9));
+		isElement: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.isDefined(obj) && (obj.nodeType === 1 || obj.nodeType === 11 || obj.nodeType === 9));
+			});
 		},
-		// - jet.isArray(obj)
-		// Check to see if an object is an array. 
-		// @param {Object} obj The object that will be checked to see if it's an array.
+		// - jet.isArray([arguments, ...])
+		// Check to see if one or more object is an array. 
 		// @return {Boolean}
 		// - 
-		isArray: function (obj) {
-			return (this.detect(obj) === 'Array');
+		isArray: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.detect(obj) === 'Array');
+			});
 		},
-		// - jet.isObject(obj)
-		// Check to see if an object is an object. 
-		// @param {Object} obj The object that will be checked to see if it's an object.
+		// - jet.isObject([arguments, ...])
+		// Check to see if one or more object is an object. 
 		// @return {Boolean}
 		// - 
-		isObject: function (obj) {
-			return (this.detect(obj) === 'Object');
+		isObject: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.detect(obj) === 'Object');
+			});
 		},
-		// - jet.isFunction(obj)
-		// Check to see if an object is a callback function. 
-		// @param {Object} obj The object that will be checked to see if it's a callback function.
+		// - jet.isFunction([arguments, ...])
+		// Check to see if one or more object is a callback function. 
 		// @return {Boolean}
 		// - 
-		isFunction: function (obj) {
-			return (this.detect(obj) === 'Function');
+		isFunction: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.detect(obj) === 'Function');
+			});
 		},
-		// - jet.isString(obj)
-		// Check to see if an object is a string. 
-		// @param {Object} obj The object that will be checked to see if it's a string.
+		// - jet.isString([arguments, ...])
+		// Check to see if one or more object is a string. 
 		// @return {Boolean}
 		// - 
-		isString: function (obj) {
-			return (this.detect(obj) === 'String');
+		isString: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.detect(obj) === 'String');
+			});
 		},
-		// - jet.isNumeric(obj)
-		// Check to see if an object is a number. 
-		// @param {Object} obj The object that will be checked to see if it's a number.
+		// - jet.isNumeric([arguments, ...])
+		// Check to see if one or more object is a number. 
 		// @return {Boolean}
 		// - 
-		isNumeric: function (obj) {
-			return (this.detect(obj) === 'Number');
+		isNumeric: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.detect(obj) === 'Number');
+			});
 		},
-		// - jet.isPlainObject(obj)
-		// Check to see if an object is a plain object (created using "{}" or "new Object").
-		// @param {Object} obj The object that will be checked to see if it's a plain object.
+		// - jet.isPlainObject([arguments, ...])
+		// Check to see if one or more object is a plain object (created using "{}" or "new Object").
 		// @return {Boolean}
 		// - 
-		isPlainObject: function (obj) {
-			if (!this.isDefined(obj)) {
-				return false;
-			}
-			if (!this.isObject(obj) || (obj.constructor && !objMethod.hasOwnProperty.call(obj.constructor.prototype, 'isPrototypeOf'))) {
-				return false;
-			}
-			return true;
+		isPlainObject: function () {
+			return jCore.filter(arguments, function (obj) {
+				if (!jCore.isDefined(obj)) {
+					return false;
+				}
+				if (!jCore.isObject(obj) || (obj.constructor && !objMethod.hasOwnProperty.call(obj.constructor.prototype, 'isPrototypeOf'))) {
+					return false;
+				}
+				return true;
+			});
 		},
-		// - jet.isDocument(obj)
-		// Check to see if an object is a document node.
-		// @param {Object} obj The object that will be checked to see if it's a document node.
+		// - jet.isDocument([arguments, ...])
+		// Check to see if one or more object is a document node.
 		// @return {Boolean}
 		// - 
-		isDocument: function (obj) {
-			return (this.isDefined(obj) && obj.nodeType === 9);
+		isDocument: function () {
+			return jCore.filter(arguments, function (obj) {
+				return (jCore.isDefined(obj) && obj.nodeType === 9);
+			});
 		},
-		// - jet.isEmpty(obj)
-		// Check to see if an object or array is empty.
+		// - jet.isEmpty([arguments, ...])
+		// Check to see if one or more object or array is empty.
 		// @param {Object} obj The object that will be checked to see if it's empty.
 		// @return {Boolean}
 		// - 
-		isEmpty: function (obj) {
-			if (obj == null) return true;
-			if (obj.length > 0) return false;
-			if (obj.length === 0) return true;
-			for (var key in obj) {
-				if (objMethod.hasOwnProperty.call(obj, key)) return false;
-			}
-			return true;
+		isEmpty: function () {
+			return jCore.filter(arguments, function (obj) {
+				if (obj == null) return true;
+				if (obj.length > 0) return false;
+				if (obj.length === 0) return true;
+				for (var key in obj) {
+					if (objMethod.hasOwnProperty.call(obj, key)) return false;
+				}
+				return true;
+			});
 		},
-		// - jet.isWindow(obj)
-		// Check to see if the object is a window object.
-		// @param {Object} obj The object that will be checked to see if a window object.
+		// - jet.isWindow([arguments, ...])
+		// Check to see if one or more object is a window object.
 		// @return {Boolean}
 		// @added 1.0.2-Beta
 		// - 
-		isWindow: function (obj) {
-			return this.isDefined(obj) && (obj.self === obj || (obj.contentWindow.self && obj.contentWindow.self === obj.contentWindow));
+		isWindow: function () {
+			return jCore.filter(arguments, function (obj) {
+				return jCore.isDefined(obj) && (obj.self === obj || (obj.contentWindow.self && obj.contentWindow.self === obj.contentWindow));
+			});
 		},
 		// - jet.each(obj, callback)
 		// Seamlessly iterate each item of an array, array-like or object.
@@ -441,46 +466,59 @@
 			}
 			return obj;
 		},
-		domReady: function () {
-			var top;
-			// DOM Ready on post load
-			if (doc.readyState === 'complete') {
-				setTimeout(jCore.readyOnLoad);
-			} else {
-				// Setup DOM Ready Event
-				if (win.addEventListener) {
-					doc.addEventListener('DOMContentLoaded', function () {
-						jCore.readyOnLoad();
-					}, false);
-				} else {
-					top = null;
-					try {
-						top = win.frameElement === null && doc.documentElement;
-					} catch (e) {}
-					if (top && top.doScroll) {
-						(function poll() {
-							if (jCore.onLoadEvent.length) {
-								try {
-									top.doScroll('left');
-								} catch (e) {
-									return setTimeout(poll, 50);
-								}
-								jCore.readyOnLoad();
-							}
-						})();
-					}
-					doc.onreadystatechange = function () {
-						if (doc.readyState === 'complete') {
-							doc.onreadystatechange = null;
-							jCore.readyOnLoad();
-						}
-					};
-				}
-				win.onload = function () {
-					jCore.readyOnLoad();
-					win.onload = null;
-				};
+		// - jCore.registerCSSHook(name, callback)
+		// Register a Hook for jet.css()
+		// @param {String} name The name of style property that will be executed by user-defined callback function.
+		// @param {Function} callback The callback function thet will be executed.
+		// @return {jet}
+		// - 
+		registerCSSHook: function (name, callback) {
+			if (jet.isString(name) && jet.trim(name) && jet.isFunction(callback)) {
+				jCSSHooks[name] = callback;
 			}
+			return this;
+		},
+		// - jCore.registerValueHook(name, callback)
+		// Register a Hook for jet.value()
+		// @param {String} name The name of object type or name that will be executed by user-defined callback function.
+		// @param {Function} callback The callback function thet will be executed.
+		// @return {jet}
+		// - 
+		registerValueHook: function (name, callback) {
+			if (jet.isString(name) && jet.trim(name) && jet.isFunction(callback)) {
+				jValueHooks[name] = callback;
+			}
+			return this;
+		},
+		// - jCore.registerPropHook(name, callback)
+		// Register a Hook for jet.prop()
+		// @param {String} name The name of property that will be executed by user-defined callback function.
+		// @param {Function} callback The callback function thet will be executed.
+		// @return {jet}
+		// - 
+		registerPropHook: function (name, callback) {
+			if (jet.isString(name) && jet.trim(name) && jet.isFunction(callback)) {
+				jPropHooks[name] = callback;
+			}
+			return this;
+		},
+		// - jCore.registerUnitHook(name, obj)
+		// Register a Hook for jUnit calculation
+		// @param {String} name The name of property that will be executed by user-defined callback function.
+		// @param {PlainObject} obj A set of callback function.
+		// @item obj:{Function} CalculateDiff(value) The callback function that for calculate the different between original and specified value.
+		// @param {String} obj.calculateDiff.value A specified value that to calculate the difference with original value.
+		// @item obj:{Function} Take(percentage) Returns the original value plus the difference in percentage provided.
+		// @param {Number} obj.take.percentage A number of percentage, between 0 to 1 (0% to 100%).
+		// @item obj:{Function} init(value) The callback function that for setup and calculate the original value.
+		// @param {String} obj.init.value A string of the original value.
+		// @return {jet}
+		// - 
+		registerUnitHook: function (name, obj) {
+			if (jet.isString(name) && jet.trim(name) && jet.isPlainObject(obj)) {
+				jUnitHooks[name] = obj;
+			}
+			return this;
 		}
 	};
 	// Jet Event Handler
@@ -603,11 +641,11 @@
 			if (jet.isArray(callback)) {
 				index = 0;
 				while (func = callback[index++]) {
-					this.ready(func);
+					jCore.ready(func);
 				}
 			} else {
 				if (jet.isFunction(callback)) {
-					jCore.onLoadEvent.push(callback);
+					onLoadEvent.push(callback);
 				}
 			}
 			return this;
@@ -784,60 +822,6 @@
 			})(d);
 			return d;
 		},
-		// - jet.registerCSSHook(name, callback)
-		// Register a Hook for jet.css()
-		// @param {String} name The name of style property that will be executed by user-defined callback function.
-		// @param {Function} callback The callback function thet will be executed.
-		// @return {jet}
-		// - 
-		registerCSSHook: function (name, callback) {
-			if (jet.isString(name) && jet.trim(name) && jet.isFunction(callback)) {
-				jCSSHooks[name] = callback;
-			}
-			return this;
-		},
-		// - jet.registerValueHook(name, callback)
-		// Register a Hook for jet.value()
-		// @param {String} name The name of object type or name that will be executed by user-defined callback function.
-		// @param {Function} callback The callback function thet will be executed.
-		// @return {jet}
-		// - 
-		registerValueHook: function (name, callback) {
-			if (jet.isString(name) && jet.trim(name) && jet.isFunction(callback)) {
-				jValueHooks[name] = callback;
-			}
-			return this;
-		},
-		// - jet.registerPropHook(name, callback)
-		// Register a Hook for jet.prop()
-		// @param {String} name The name of property that will be executed by user-defined callback function.
-		// @param {Function} callback The callback function thet will be executed.
-		// @return {jet}
-		// - 
-		registerPropHook: function (name, callback) {
-			if (jet.isString(name) && jet.trim(name) && jet.isFunction(callback)) {
-				jPropHooks[name] = callback;
-			}
-			return this;
-		},
-		// - jet.registerUnitHook(name, obj)
-		// Register a Hook for jUnit calculation
-		// @param {String} name The name of property that will be executed by user-defined callback function.
-		// @param {PlainObject} obj A set of callback function.
-		// @item obj:{Function} CalculateDiff(value) The callback function that for calculate the different between original and specified value.
-		// @param {String} obj.calculateDiff.value A specified value that to calculate the difference with original value.
-		// @item obj:{Function} Take(percentage) Returns the original value plus the difference in percentage provided.
-		// @param {Number} obj.take.percentage A number of percentage, between 0 to 1 (0% to 100%).
-		// @item obj:{Function} init(value) The callback function that for setup and calculate the original value.
-		// @param {String} obj.init.value A string of the original value.
-		// @return {jet}
-		// - 
-		registerUnitHook: function (name, obj) {
-			if (jet.isString(name) && jet.trim(name) && jet.isPlainObject(obj)) {
-				jUnitHooks[name] = obj;
-			}
-			return this;
-		},
 		// - jet.walk(obj, callback)
 		// Execute the user-defined callback function to each item of the array, array-like object, plain object or object.
 		// @param {Object} obj The array, array-like object, plain object or object that will be iterated.
@@ -880,6 +864,19 @@
 				});
 			}
 			return queryString.join('&');
+		},
+		// - jet.plugin(callback)
+		// Generates a URL-encoded query string from the array or plain object provided.
+		// @param {Function} callback The callback function that will be executed for plugin install
+		// @return {jet}
+		// @added 1.0.5-Beta
+		// - 
+		plugin: function (callback) {
+			if (jCore.isFunction(callback)) {
+				var jCoreClone = jCore.clone(jCore);
+				callback.call(jCoreClone, jCoreClone);
+			}
+			return this;
 		}
 	});
 	jObject = function jObject() {};
@@ -1388,8 +1385,8 @@
 			return this;
 		}
 	});
-	// Append and Preppend function
 
+	// Append and Preppend function
 	function insertTo(obj, element, type) {
 		var contents, length = (obj.length) ? obj.length - 1 : 0;
 		if (element && jet.isCollection(element) && element.length > 0) {
@@ -1708,7 +1705,7 @@
 				} else {
 					elem = obj[0] || obj;
 					if (jet.isElement(elem)) {
-						return (isIE) ? elem[attrMapping[attr.toLowerCase()] || attr] : elem.getAttribute(attr, 2);
+						return (jCore.isIE) ? elem[attrMapping[attr.toLowerCase()] || attr] : elem.getAttribute(attr, 2);
 					}
 				}
 			}
@@ -1756,7 +1753,7 @@
 				return '';
 			}
 		},
-		// - .bind(event, callback) mirroring jet.bind(@obj, event, callback)
+		// - .bindEvent(event, callback) mirroring jet.bindEvent(@obj, event, callback)
 		// Bind the callback function to specifed event in every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
 		// @param {String} event The name of the event.
@@ -1797,7 +1794,7 @@
 			}
 			return this;
 		},
-		// - .unbind(event) mirroring jet.unbind(@obj, event)
+		// - .unbindEvent(event) mirroring jet.unbindEvent(@obj, event)
 		// Unbind the specifed event in every matched element.
 		// @param {Object} obj The set of elements, it can be array, array-like object or specified DOM element.
 		// @param {String} event The name of the event to unbind.
@@ -2415,7 +2412,7 @@
 		if (jet.isDefined(baseElements)) {
 			if (jet.isElement(baseElements)) {
 				elements = [baseElements];
-			} else if (jet.IsCollection(baseElements)) {
+			} else if (jet.isCollection(baseElements)) {
 				elements = baseElements;
 			}
 		}
@@ -2934,7 +2931,7 @@
 						porperty;
 					if (jet.isPlainObject(prop)) {
 						for (index in prop) {
-							if (acceptedProp.test(jet.camelCase(index))) {
+							if (acceptedProp.test(jet.camelCase(index)) || jCSSHooks[index]) {
 								propAllowed[index] = prop[index];
 							}
 						}
@@ -3040,6 +3037,7 @@
 		}
 		return self;
 	};
+
 	// jDeferred Callback Stack object
 	function Stack(options) {
 		var queue = [],
@@ -3078,7 +3076,7 @@
 							callback.apply(reference, memory);
 						}
 					} else if (cachedOptions.stack) {
-						if (queue.length) {
+						while (queue.length) {
 							queue.shift().apply(reference, memory);
 						}
 					}
@@ -3405,163 +3403,226 @@
 			return self;
 		}
 	});
+
 	win.jet = jet;
 	//register css: Hooks
 	jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
-		jet.registerCSSHook(css, function (obj, prop, value) {
-			var setValue = 0,
-				elem;
-			if (jet.isDefined(value)) {
-				jet.each(obj, function () {
-					if (jet.isElement(this)) {
-						if (jet.isFunction(value)) {
-							setValue = value.call(this, jet.prop(this, prop));
-						} else {
-							setValue = value;
+		jet.plugin(function(jCore) {
+			jCore.registerCSSHook(css, function (obj, prop, value) {
+				var setValue = 0,
+					elem;
+				if (jet.isDefined(value)) {
+					jet.each(obj, function () {
+						if (jet.isElement(this)) {
+							if (jet.isFunction(value)) {
+								setValue = value.call(this, jet.prop(this, prop));
+							} else {
+								setValue = value;
+							}
+							jet.prop(this, prop, setValue);
 						}
-						jet.prop(this, prop, setValue);
+					});
+					return this;
+				} else {
+					elem = obj[0];
+					if (jet.isElement(elem)) {
+						return jet[jet.capitalise(prop)](elem);
 					}
-				});
-				return this;
-			} else {
-				elem = obj[0];
-				if (jet.isElement(elem)) {
-					return jet[jet.capitalise(prop)](elem);
+					return 0;
 				}
-				return 0;
-			}
+			});
 		});
 	});
 	//	register Prop: Hooks
 	//	register Value: Hooks
-	jet.registerValueHook('select', function (element, value) {
-		var returns = [],
-			valueMap = {};
-		if (jet.isDefined(value)) {
-			if (jet.isString(value)) {
-				value = [value];
-			}
-			if (jet.isArray(value)) {
-				jet.each(value, function () {
-					valueMap[this] = true;
-				});
-				jet.each(element.options, function () {
-					if (valueMap[this.value]) {
-						this.selected = true;
-					} else {
-						this.selected = false;
-					}
-				});
-			}
-			return this;
-		} else {
-			if (element.multiple) {
-				jet.each(element.options, function () {
-					if (this.selected && !this.disabled && (!jCore.nodeName(this.parentNode, 'optgroup') || !this.parentNode.disabled)) {
-						returns.push(this.value);
-					}
-				});
-				return returns;
-			} else {
-				return elementoptions[obj.selectedIndex].value;
-			}
-		}
-	});
-	jCore.each(['checkbox', 'radio'], function () {
-		jet.registerValueHook(this, function (element, value) {
+	jet.plugin(function(jCore) {
+		jCore.registerValueHook('select', function (element, value) {
+			var returns = [],
+				valueMap = {};
 			if (jet.isDefined(value)) {
 				if (jet.isString(value)) {
 					value = [value];
 				}
-				element.checked = jet.inArray(value, element.value);
+				if (jet.isArray(value)) {
+					jet.each(value, function () {
+						valueMap[this] = true;
+					});
+					jet.each(element.options, function () {
+						if (valueMap[this.value]) {
+							this.selected = true;
+						} else {
+							this.selected = false;
+						}
+					});
+				}
 				return this;
 			} else {
-				if (element.checked) {
-					if (jet.isDefined(element.getAttribute('value'))) {
-						return element.value;
-					} else {
-						return 'on';
-					}
+				if (element.multiple) {
+					jet.each(element.options, function () {
+						if (this.selected && !this.disabled && (!jCore.nodeName(this.parentNode, 'optgroup') || !this.parentNode.disabled)) {
+							returns.push(this.value);
+						}
+					});
+					return returns;
+				} else {
+					return elementoptions[obj.selectedIndex].value;
 				}
-				return null;
 			}
+		});
+	});
+	jCore.each(['checkbox', 'radio'], function (i, type) {
+		jet.plugin(function(jCore) {
+			jCore.registerValueHook(type, function (element, value) {
+				if (jet.isDefined(value)) {
+					if (jet.isString(value)) {
+						value = [value];
+					}
+					element.checked = jet.inArray(value, element.value);
+					return this;
+				} else {
+					if (element.checked) {
+						if (jet.isDefined(element.getAttribute('value'))) {
+							return element.value;
+						} else {
+							return 'on';
+						}
+					}
+					return null;
+				}
+			});
 		});
 	});
 	// Register jUnit Hooks
-	jCore.each(['backgroundColor', 'color'], function () {
-		jet.registerUnitHook(this, {
-			take: function (percentage) {
-				return this.pixel.diff(this.diff, percentage)
-					.toHex;
-			},
-			calculateDiff: function (value) {
-				this.diff = jColor(value);
-				return this;
-			},
-			init: function (value, element) {
-				this.pixel = jColor(value);
-				return this;
-			}
-		});
-	});
-	jCore.each(['padding', 'margin'], function () {
-		jet.registerUnitHook(this, {
-			take: function (percentage) {
-				var ref = this,
-					val = [];
-				jet.each(this.pixel, function (i, value) {
-					val[i] = (ref.pixel[i] + (ref.diff[i] * percentage)) + 'px';
-				});
-				return val.join(' ');
-			},
-			init: function (value, element) {
-				var valueSet, ref = this;
-				// IE fix: Get the value from marginTop, marginLeft, marginBottom, marginRight instead of margin
-				valueSet = [jet.css(element, 'margin-top'), jet.css(element, 'margin-right'), jet.css(element, 'margin-bottom'), jet.css(element, 'margin-left')];
-				this.pixel = [];
-				jet.each(valueSet, function (i, propValue) {
-					if ((matches = unitRegex.exec(propValue)) !== null) {
-						ref.pixel[i] = ref.toPixel(parseFloat(matches[1]), matches[2], ref.parentPx);
-					}
-				});
-				return this;
-			},
-			calculateDiff: function (value) {
-				var valueSet = value.split(' '),
-					val = [],
-					target = [],
-					ref = this;
-
-				if (valueSet.length === 1) {
-					if (this.pixel.length === 2) {
-						target[0] = target[1] = valueSet[0];
-					} else if (this.pixel.length === 4) {
-						target[0] = target[1] = target[2] = target[3] = valueSet[0];
-					}
-				} else if (valueSet.length === 2) {
-					target[0] = target[1] = valueSet[0];
-					target[2] = target[3] = valueSet[1];
-				} else {
-					target = valueSet;
+	jCore.each(['backgroundColor', 'color'], function (i, prop) {
+		jet.plugin(function(jCore) {
+			jCore.registerUnitHook(prop, {
+				take: function (percentage) {
+					return this.pixel.diff(this.diff, percentage)
+						.toHex;
+				},
+				calculateDiff: function (value) {
+					this.diff = jColor(value);
+					return this;
+				},
+				init: function (value, element) {
+					this.pixel = jColor(value);
+					return this;
 				}
-
-				this.diff = [];
-				jet.each(this.pixel, function (i, propValue) {
-					var targetVal = target[i];
-					if ((matches = unitRegex.exec(targetVal)) !== null) {
-						if (matches[2]) {
-							ref.diff[i] = ref.toPixel(parseFloat(matches[1]), matches[2].toLowerCase(), ref.parentPx) - propValue;
-						} else {
-							ref.diff[i] = parseFloat(matches[1]) - propValue;
-						}
-					}
-				});
-				return this;
-			}
+			});
 		});
 	});
+	jCore.each(['padding', 'margin'], function (i, prop) {
+		jet.plugin(function(jCore) {
+			jCore.registerUnitHook(prop, {
+				take: function (percentage) {
+					var ref = this,
+						val = [];
+					jet.each(this.pixel, function (i, value) {
+						val[i] = (ref.pixel[i] + (ref.diff[i] * percentage)) + 'px';
+					});
+					return val.join(' ');
+				},
+				init: function (value, element) {
+					var valueSet, ref = this;
+					// IE fix: Get the value from marginTop, marginLeft, marginBottom, marginRight instead of margin
+					valueSet = [jet.css(element, 'margin-top'), jet.css(element, 'margin-right'), jet.css(element, 'margin-bottom'), jet.css(element, 'margin-left')];
+					this.pixel = [];
+					jet.each(valueSet, function (i, propValue) {
+						if ((matches = unitRegex.exec(propValue)) !== null) {
+							ref.pixel[i] = ref.toPixel(parseFloat(matches[1]), matches[2], ref.parentPx);
+						}
+					});
+					return this;
+				},
+				calculateDiff: function (value) {
+					var valueSet = value.split(' '),
+						val = [],
+						target = [],
+						ref = this;
+	
+					if (valueSet.length === 1) {
+						if (this.pixel.length === 2) {
+							target[0] = target[1] = valueSet[0];
+						} else if (this.pixel.length === 4) {
+							target[0] = target[1] = target[2] = target[3] = valueSet[0];
+						}
+					} else if (valueSet.length === 2) {
+						target[0] = target[1] = valueSet[0];
+						target[2] = target[3] = valueSet[1];
+					} else {
+						target = valueSet;
+					}
+	
+					this.diff = [];
+					jet.each(this.pixel, function (i, propValue) {
+						var targetVal = target[i];
+						if ((matches = unitRegex.exec(targetVal)) !== null) {
+							if (matches[2]) {
+								ref.diff[i] = ref.toPixel(parseFloat(matches[1]), matches[2].toLowerCase(), ref.parentPx) - propValue;
+							} else {
+								ref.diff[i] = parseFloat(matches[1]) - propValue;
+							}
+						}
+					});
+					return this;
+				}
+			});
+		});
+	});
+
+	function readyOnLoad() {
+		var index = 0,
+			callback;
+		while (callback = onLoadEvent[index++]) {
+			callback.call(this);
+		}
+		onLoadEvent = [];
+	}
+
+	function domReady() {
+		var top;
+		// DOM Ready on post load
+		if (doc.readyState === 'complete') {
+			setTimeout(readyOnLoad);
+		} else {
+			// Setup DOM Ready Event
+			if (win.addEventListener) {
+				doc.addEventListener('DOMContentLoaded', function () {
+					readyOnLoad();
+				}, false);
+			} else {
+				top = null;
+				try {
+					top = win.frameElement === null && doc.documentElement;
+				} catch (e) {}
+				if (top && top.doScroll) {
+					(function poll() {
+						if (onLoadEvent.length) {
+							try {
+								top.doScroll('left');
+							} catch (e) {
+								return setTimeout(poll, 50);
+							}
+							readyOnLoad();
+						}
+					})();
+				}
+				doc.onreadystatechange = function () {
+					if (doc.readyState === 'complete') {
+						doc.onreadystatechange = null;
+						readyOnLoad();
+					}
+				};
+			}
+			win.onload = function () {
+				readyOnLoad();
+				win.onload = null;
+			};
+		}
+	}
+
 	// Setup Onload Event
-	jCore.domReady();
+	domReady();
 	if (jCore.isDefined(win.define) && jCore.isFunction(define) && define.amd) {
 		define('jet', [], function () {
 			return jet;
