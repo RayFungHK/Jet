@@ -1,5 +1,5 @@
 /*!
- * Jet JavaScript Library v1.0.4-Beta
+ * Jet JavaScript Library v1.0.5-Beta
  * http://js-jet.com/
  *
  * Copyright 2014 Ray Fung
@@ -7,7 +7,7 @@
  * The MIT License is simple and easy to understand and it places almost no restrictions on what you can do with a Jet.
  * You are free to use any Jet in any other project (even commercial projects) as long as the copyright header is left intact.
  *
- *    Date: 2014-03-31T14:25Z
+ *    Date: 2014-04-02T17:55Z
  */
 (function () {
 	var jet = function () {
@@ -574,7 +574,7 @@
 	// Extend jet class, static function
 	jCore.extend(jet, {
 		// @added 1.0.2-Beta
-		version: '1.0.4-Beta',
+		version: '1.0.5-Beta',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
@@ -3406,8 +3406,8 @@
 
 	win.jet = jet;
 	//register css: Hooks
-	jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
-		jet.plugin(function(jCore) {
+	jet.plugin(function(jCore) {
+		jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
 			jCore.registerCSSHook(css, function (obj, prop, value) {
 				var setValue = 0,
 					elem;
@@ -3470,8 +3470,8 @@
 			}
 		});
 	});
-	jCore.each(['checkbox', 'radio'], function (i, type) {
-		jet.plugin(function(jCore) {
+	jet.plugin(function(jCore) {
+		jCore.each(['checkbox', 'radio'], function (i, type) {
 			jCore.registerValueHook(type, function (element, value) {
 				if (jet.isDefined(value)) {
 					if (jet.isString(value)) {
@@ -3493,8 +3493,8 @@
 		});
 	});
 	// Register jUnit Hooks
-	jCore.each(['backgroundColor', 'color'], function (i, prop) {
-		jet.plugin(function(jCore) {
+	jet.plugin(function(jCore) {
+		jCore.each(['backgroundColor', 'color'], function (i, prop) {
 			jCore.registerUnitHook(prop, {
 				take: function (percentage) {
 					return this.pixel.diff(this.diff, percentage)
@@ -3511,8 +3511,8 @@
 			});
 		});
 	});
-	jCore.each(['padding', 'margin'], function (i, prop) {
-		jet.plugin(function(jCore) {
+	jet.plugin(function(jCore) {
+		jCore.each(['padding', 'margin'], function (i, prop) {
 			jCore.registerUnitHook(prop, {
 				take: function (percentage) {
 					var ref = this,
