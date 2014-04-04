@@ -1,5 +1,5 @@
 /*!
- * Jet JavaScript Library v1.0.5-Beta
+ * Jet JavaScript Library v1.0.6-Beta
  * http://js-jet.com/
  *
  * Copyright 2014 Ray Fung
@@ -7,7 +7,7 @@
  * The MIT License is simple and easy to understand and it places almost no restrictions on what you can do with a Jet.
  * You are free to use any Jet in any other project (even commercial projects) as long as the copyright header is left intact.
  *
- *    Date: 2014-04-02T17:55Z
+ *    Date: 2014-04-03T08:33Z
  */
 (function () {
 	var jet = function () {
@@ -61,8 +61,10 @@
 		// Object Alias
 		win = window,
 		doc = win.document,
+		docElem = doc.documentElement,
 		nav = navigator,
 		iframe = null,
+		boxAdjust = null,
 		defaultStyles = {},
 		attrMapping = {
 			'accesskey': 'accessKey',
@@ -574,7 +576,7 @@
 	// Extend jet class, static function
 	jCore.extend(jet, {
 		// @added 1.0.2-Beta
-		version: '1.0.5-Beta',
+		version: '1.0.6-Beta',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
@@ -656,7 +658,7 @@
 		// @return {String}
 		// - 
 		trim: function (text) {
-			return text.replace(/^\s+|\s+$/g, '');
+			return (!jCore.isString(text)) ? '' : text.replace(/^\s+|\s+$/g, '');
 		},
 		// - jet.childAt(obj, type)
 		// Check to see the element is the first or the last node in current node set. Equivalent as jet.is(obj, ':first-child') or jet.is(obj, ':last-child').
@@ -1383,6 +1385,18 @@
 			element.jAnimate.wait(duration, callback);
 			element.jAnimate.play();
 			return this;
+		},
+		// - .abort()
+		// Stop the animation and clear all animation queue
+		// @return {jObject}
+		// @added 1.0.6-Beta
+		// - 
+		abort: function () {
+			var element = this[0];
+			if (element.jAnimate) {
+				element.jAnimate.clear();
+			}
+			return this;
 		}
 	});
 
@@ -1940,7 +1954,7 @@
 					if (hook) {
 						return hook.call(ref, elem, value);
 					}
-					return obj.value;
+					return elem.value;
 				}
 				return '';
 			}
@@ -2063,26 +2077,76 @@
 		// - 
 		offset: function (obj) {
 			var offset = {
-				left: 0,
-				top: 0
+				top: 0,
+				left: 0
 			},
-				elem, bRect, eRect;
+				offsetParent, parentOffset = { top: 0, left: 0 };
 			if (jet.isElement(obj)) {
-				if (!obj.getBoundingClientRect) {
-					bRect = doc.body.getBoundingClientRect();
-					eRect = obj.getBoundingClientRect();
-					offset.top = eRect.top - bRect.top;
-					offset.left = eRect.left - bRect.left;
-				} else {
-					elem = obj;
-					while (jet.isDefined(elem.offsetLeft) && jet.isDefined(elem.offsetTop)) {
-						offset.left += elem.offsetLeft;
-						offset.top += elem.offsetTop;
-						elem = elem.parentNode;
-					}
+				offsetParent = this.offsetParent();
+				if (!jCore.nodeName(offsetParent, 'html')) {
+					parentOffset = offsetParent.offset();
 				}
+				parentOffset.top += this.css('borderTopWidth');
+				parentOffset.left += this.css('borderLeftWidth');
+
+				offset = this.boxRect();
+				return {
+					top: offset.top - parentOffset.top - this.css('marginTop'),
+					left: offset.left - parentOffset.left - this.css('marginLeft')
+				};
 			}
+
 			return offset;
+		},
+		// - .offsetParent() mirroring jet.offsetParent(@obj)
+		// Get the first element's parent offset of the first of matched elements.
+		// @param {DOMElement} obj The element to get.
+		// @return {jObject}
+		// @added 1.0.6-Beta
+		// - 
+		offsetParent: function (obj) {
+			var offsetParent = obj.offsetParent || docElem;
+			while (offsetParent) {
+				if (jCore.nodeName(offsetParent, 'html') || jet.css(offsetParent, 'position') !== 'static') {
+					break;
+				}
+				offsetParent = offsetParent.offsetParent;
+			}
+
+			return offsetParent || docElem;
+		},
+		// - .boxRect() mirroring jet.boxRect(@obj)
+		// Get the first element's BoundingClientRect() of the set of matched elements, adjust the offset in IE.
+		// @param {DOMElement} obj The element to get.
+		// @return {PlainObject}
+		// @added 1.0.6-Beta
+		// - 
+		boxRect: function (obj) {
+			var rect, box, boxrect = {};
+
+		    rect = obj.getBoundingClientRect();
+			if (!jCore.isIE) {
+				return {
+					left: rect.left,
+					right: rect.right,
+					top: rect.top,
+					bottom: rect.bottom
+				};
+			}
+
+		    if (jCore.isIE && boxAdjust === null) {
+		    	box = jet('<div style="position:absolute;top:0;left:0"></div>').appendTo('body');
+		        boxAdjust = -box[0].getBoundingClientRect().top;
+		        box.detach();
+		        box = null;
+		    }
+
+	        boxrect.left = rect.left + boxAdjust;
+	        boxrect.right = rect.right + boxAdjust;
+	        boxrect.top = rect.top + boxAdjust;
+	        boxrect.bottom = rect.bottom + boxAdjust;
+
+		    return boxrect;
 		},
 		// - .height([value]) mirroring jet.height(@obj[, value])
 		// Get the first element's height of the set of matched elements or set the height for every matched element.
@@ -2109,10 +2173,10 @@
 				}
 				return this;
 			} else {
-				if (obj == win) {
+				if (obj === win) {
 					return parseInt(win.innerHeight);
-				} else if (obj == doc || obj == body) {
-					returnValue = doc.documentElement.clientHeight || jet('body')
+				} else if (obj === doc) {
+					returnValue = docElem.clientHeight || jet('body')
 						.css('clientHeight');
 					returnValue = parseInt(value);
 					return returnValue;
@@ -2799,7 +2863,7 @@
 	function jUnit(elem, prop) {
 		var propValue, parentEle, matches, color, self = {
 				diff: null,
-				pixel: null,
+				pixel: 0,
 				property: '',
 				parentPx: null,
 				hasUnit: false,
@@ -2903,6 +2967,7 @@
 						self.parentPx = parseInt(matches[1]);
 					}
 				}
+
 				if ((matches = unitRegex.exec(propValue)) !== null) {
 					if (matches[2]) {
 						self.hasUnit = true;
@@ -2924,6 +2989,7 @@
 			onPlaying = false,
 			environmentFPS = 60,
 			speed = 1,
+			elem,
 			acceptedProp = /^scroll(Left|Top)|width|height|left|top|right|bottom|opacity|fontSize|color|backgroundColor|border((Left|Right|Top|Bottom)?Width)|lineHeight|padding(Left|Right|Top|Bottom)?|margin(Left|Right|Top|Bottom)?$/,
 			self = {
 				apply: function (prop, duration, easing, callbackObj) {
@@ -2968,11 +3034,11 @@
 								if (queue[0].progress === queue[0].frames) {
 									queue[0].progress = 0;
 									for (index in queue[0].to) {
-										jet.css(element, index, queue[0].to[index]);
+										jet.css(elem, index, queue[0].to[index]);
 									}
 									unit = {};
 									if (queue[0].complete) {
-										queue[0].complete.call(element);
+										queue[0].complete.call(elem);
 									}
 									queue = queue.slice(1);
 									if (queue.length === 0) {
@@ -2983,19 +3049,19 @@
 									if (queue[0].progress === 0) {
 										// Start new queue, and setup
 										for (index in queue[0].to) {
-											unit[index] = jUnit(element, index);
+											unit[index] = jUnit(elem, index);
 											unit[index].calculateDiff(queue[0].to[index]);
 										}
 									} else {
 										if (!jet.isEmpty(queue[0].to)) {
 											for (index in queue[0].to) {
 												pc = (easingType[queue[0].easing] || easingType.linear)(queue[0].progress / (queue[0].frames || 1));
-												jet.css(element, index, unit[index].take(pc));
+												jet.css(elem, index, unit[index].take(pc));
 											}
 										}
 									}
 									if (queue[0].step) {
-										queue[0].step.call(element);
+										queue[0].step.call(elem);
 									}
 									queue[0].progress++;
 								}
@@ -3018,9 +3084,8 @@
 					return self;
 				},
 				clear: function () {
-					pause();
-					quene = [];
-					diff = {};
+					self.pause();
+					queue = [];
 					return self;
 				}
 			};
@@ -3033,7 +3098,7 @@
 		}
 
 		if (jet.isElement(element)) {
-			this.element = element;
+			elem = element;
 		}
 		return self;
 	};
@@ -3406,8 +3471,8 @@
 
 	win.jet = jet;
 	//register css: Hooks
-	jet.plugin(function(jCore) {
-		jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
+	jCore.each(['scrollTop', 'scrollLeft'], function (i, css) {
+		jet.plugin(function(jCore) {
 			jCore.registerCSSHook(css, function (obj, prop, value) {
 				var setValue = 0,
 					elem;
@@ -3470,8 +3535,8 @@
 			}
 		});
 	});
-	jet.plugin(function(jCore) {
-		jCore.each(['checkbox', 'radio'], function (i, type) {
+	jCore.each(['checkbox', 'radio'], function (i, type) {
+		jet.plugin(function(jCore) {
 			jCore.registerValueHook(type, function (element, value) {
 				if (jet.isDefined(value)) {
 					if (jet.isString(value)) {
@@ -3493,8 +3558,8 @@
 		});
 	});
 	// Register jUnit Hooks
-	jet.plugin(function(jCore) {
-		jCore.each(['backgroundColor', 'color'], function (i, prop) {
+	jCore.each(['backgroundColor', 'color'], function (i, prop) {
+		jet.plugin(function(jCore) {
 			jCore.registerUnitHook(prop, {
 				take: function (percentage) {
 					return this.pixel.diff(this.diff, percentage)
@@ -3511,8 +3576,8 @@
 			});
 		});
 	});
-	jet.plugin(function(jCore) {
-		jCore.each(['padding', 'margin'], function (i, prop) {
+	jCore.each(['padding', 'margin'], function (i, prop) {
+		jet.plugin(function(jCore) {
 			jCore.registerUnitHook(prop, {
 				take: function (percentage) {
 					var ref = this,
