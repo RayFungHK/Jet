@@ -929,7 +929,7 @@
 	// Setup the jetObject as a prototype object
 	// jet function
 	jet.extend({
-		version: '1.1.0',
+		version: '1.0.8',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
