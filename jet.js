@@ -24,6 +24,8 @@
 			checkable: /^(checkbox|radio)$/i,
 			eventname: /^(\w*)(\.([\w_\-]+))?$/i,
 			unit: /(-?[0-9\.]+)\s*([a-z%]*)/i,
+			colorRegex: /rgb\(([0-9]+),\s*([0-9]+),\s*([0-9]+)\)/i,
+			hexRegex: /([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})?/i,
 			type: /\[object ([a-z]+)\]/i,
 			timestamp: /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\+[0-9]{2}:[0-9]{2}|Z)?/,
 			dateformat: /([y]{1,4}|[M]{1,4}|[d]{1,4}|hh|h|HH|H|mm|m|ss|s|tt|t|f|q)/g
@@ -56,22 +58,32 @@
 			prop: {},
 			unit: {}
 		},
-		jetObject;
+		jetObject = function() {};
 	jet = function(selector, context) {
-		if (core.isFunction(selector)) {
-			jet.ready(selector);
-		} else if (core.isElement(selector) || core.isWindow(selector)) {
-			jetObj = new jetObject();
-			jetObj.push(selector);
-			return jetObj;
-		} else if (core.isString(selector)) {
-			if (selector[0] === '<' && selector[selector.length - 1] === '>' && selector.length > 3) {
-				return jet.shift(selector);
-			} else {
-				return querySelector(selector, context, new jetObject());
+		var jetObj;
+
+		if (core.isDefined(selector)) {
+			if (core.isFunction(selector)) {
+				jet.ready(selector);
+			} else if (core.isElement(selector) || core.isWindow(selector)) {
+				jetObj = new jetObject();
+				jetObj.push(selector);
+				return jetObj;
+			} else if (core.isString(selector)) {
+				if (selector[0] === '<' && selector[selector.length - 1] === '>' && selector.length > 3) {
+					return jet.shift(selector);
+				} else {
+					return querySelector(selector, context, new jetObject());
+				}
+			} else if (core.isCollection(selector)) {
+				jetObj = new jetObject();
+				each(selector, function () {
+					jetObj.merge(jet(this));
+				});
+				return jetObj;
 			}
 		}
-		return this;
+		return new jetObject();
 	};
 	// Global Function, can be called in plugin implement
 	core = {
@@ -232,7 +244,7 @@
 		// - 
 		isEmpty: function() {
 			return walk(arguments, function(object) {
-				if (object === null || object.length === 0) return true;
+				if (object === null || !core.isDefined(object) || object.length === 0) return true;
 				if (object.length > 0) return false;
 				for (var key in object) {
 					if (hasOwn.call(object, key)) return false;
@@ -370,6 +382,11 @@
 			};
 		}
 	};
+
+	each('isChrome isSafari isOpera isFirefox isIE getType isDefined isWalkable isJetObject isCollection isElement isArray isObject isFunction isString isNumeric isPlainObject isDocument isEmpty isWindow'.split(' '), function() {
+		jet[this] = core[this];
+	});
+
 	// - jet.each(obj, callback)
 	// Seamlessly iterate each item of an array, array-like or object.
 	// @param {Object} obj The object that will be checked to see if it's included in a specified array.
@@ -386,7 +403,9 @@
 				}
 			} else if (core.isObject(objects)) {
 				for (index in objects) {
-					callback.call(objects[index], index, objects[index]);
+					if (objects.hasOwnProperty(index)) {
+						callback.call(objects[index], index, objects[index]);
+					}
 				}
 			} else {
 				callback.call(objects, 0, objects);
@@ -447,7 +466,9 @@
 	function clone(object) {
 		var newObject, index, length;
 		if (!core.isDefined(object) || !object) return object;
-		if (object instanceof Date) {} else if (core.isObject(object) || core.isJetObject(object)) {
+		if (object instanceof Date) {
+			
+		} else if (core.isObject(object) || core.isJetObject(object)) {
 			newObject = {};
 			for (index in object) {
 				newObject[index] = clone(object[index]);
@@ -515,11 +536,11 @@
 	// - 
 
 	function trim(text) {
-		return (!core.isString(text)) ? '' : text.replace(/^\s+|\s+$/g, '');
+		return (!core.isString(text)) ? '' : text.replace(/(^\s*)|(\s*$)/g, '');
 	}
-	jet.trim = trim = trim;
-	// Walk all object
+	jet.trim = trim;
 
+	// Walk all object
 	function walk(objects, callback) {
 		var index = 0,
 			length = objects.length;
@@ -532,8 +553,8 @@
 		}
 		return true;
 	}
-	// Unique Element
 
+	// Unique Element
 	function unique(objects, collection) {
 		var index = 0,
 			elem, returns = collection || [];
@@ -547,8 +568,8 @@
 		reset(returns);
 		return returns;
 	}
-	// Sibling Element
 
+	// Sibling Element
 	function siblingElement(object, type) {
 		var direction = type + 'Sibling',
 			elementDirection = type + 'ElementSibling';
@@ -929,7 +950,7 @@
 	// Setup the jetObject as a prototype object
 	// jet function
 	jet.extend({
-		version: '1.0.8',
+		version: '1.1.0',
 		// - jet.noConflict()
 		// Release the jet control of the jet variable.
 		// @return {jet}
@@ -968,8 +989,8 @@
 		shift: function(html) {
 			var object = new jetObject();
 			container.innerHTML = html;
-			each(container.getElementsByTagName('*'), function() {
-				object.push(this);
+			each(container.children, function() {
+				object.push(this.cloneNode(true));
 			});
 			container.innerHTML = '';
 			return object;
@@ -1004,7 +1025,10 @@
 				};
 			} else {
 				object.parser = function() {
-					return eval('(' + this + ')');
+					if (core.isString(this) && this.length > 0) {
+						return eval('(' + this + ')');
+					}
+					return {};
 				};
 			}
 			return jet.request(object);
@@ -1028,7 +1052,7 @@
 				var xmlHttp = null,
 					dataString = '',
 					index;
-				if (core.isPlainObject(object) && object.url.length > 0) {
+				if (core.isPlainObject(object) && core.isDefined(object.url) && object.url.length > 0) {
 					// Setup HTTP Request
 					xmlHttp = new XMLHttpRequest();
 					// Setup Timeout
@@ -1061,7 +1085,7 @@
 						// Set Post Data
 						if (core.isDefined(object.data)) {
 							xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-							if (core.isPlainobjectect(object.data)) {
+							if (core.isPlainObject(object.data)) {
 								for (index in object.data) {
 									dataString += (dataString.length) ? '&' + index + '=' + object.data[index] : index + '=' + object.data[index];
 								}
@@ -1108,7 +1132,7 @@
 		buildQueryString: function(object) {
 			var queryString = [],
 				value;
-			if (core.isArray(object)) {
+			if (core.isCollection(object)) {
 				each(object, function() {
 					if (core.isDefined(this.name, this.value)) {
 						value = (core.isFunction(this.value)) ? this.value() : this.value;
@@ -1121,8 +1145,36 @@
 					queryString.push(encodeURIComponent(i) + '=' + encodeURIComponent(value));
 				});
 			}
-			return queryString.join('&');
+			return (queryString.length > 0) ? queryString.join('&') : '';
 		},
+		
+		// - .json()
+		// Encode a object as a json.
+		// @return {String}
+		// - 
+		json: function(object) {
+			return (function parse(obj){
+				var returns = [];
+				if (core.isObject(obj)) {
+					if (core.isDefined(obj.name, obj.value)) {
+						returns.push('"' + obj.name + '": ' + '"' + ((core.isFunction(obj.value)) ? obj.value() : obj.value) + '"');
+					} else {
+						each(obj, function(key, value) {
+							returns.push('"' + key + '": ' + parse(value));
+						});
+					}
+					return '{' + returns.join(', ') + '}';
+				} else if (core.isCollection(obj)) {
+					each(obj, function(key, value) {
+						returns.push('"' + key + '": ' + parse(value));
+					});
+					return '[' + returns.join(', ') + ']';
+				} else {
+					return '"' + obj.toString() + '"';
+				}
+			})(object);
+		},
+
 		// - jet.developer(callback)
 		// Provide developer environment for plugin implementation.
 		// @param {Function} callback The callback function that will be executed for developer environment
@@ -1192,6 +1244,7 @@
 
 											evt[1] = evt[1].toLowerCase();
 											e = getEventObject(this, evt[1], evt[2]);
+
 											callback.call(elem, e);
 										}
 									}
@@ -1234,15 +1287,31 @@
 		return self;
 	}
 
+	function getNativeEvent(element, evt) {
+		if (element[evt]) {
+			return element[evt];
+		} else if (element['on' + evt]) {
+			return element['on' + evt];
+		}
+		return null;
+	}
+
 	// Jet Element Event Handler
-	function jEvent(element) {
+	function jEvent(element, evt) {
 		var events = {},
+			nativeEvent = null,
 			self = {
 				element: null,
 				add: function(namespace, callback) {
-					if (!namespace) namespace = '__default';
-					if (!core.isDefined(events[namespace])) events[namespace] = [];
-					events[namespace].push(callback);
+					if (core.isEmpty(events)) {
+						nativeEvent = getNativeEvent(element, evt);
+					}
+					events['__default'] = callback;
+
+					if (!core.isDefined(events[namespace])) {
+						events[namespace] = function () {};
+					}
+					events[namespace] = callback;
 					return this;
 				},
 				remove: function(namespace) {
@@ -1259,21 +1328,21 @@
 						var index;
 						// Fixed below IE8
 						e = e || win.event;
+						(function (evt) {
+							self.trigger = function () {
+								nativeEvent.call(element, evt);
+							}
+						})(e);
+						e.nativeEvent = self.trigger;
 
 						// If trigger with namespace, call the specify event handler
 						if (core.isDefined(e.namespace) && e.namespace) {
 							if (core.isDefined(events[e.namespace])) {
-								each(events[e.namespace], function () {
-									this.call(element, e);
-								});
+								events[e.namespace].call(element, e);
 							}
 						} else {
-							// If trigger without namespace, execute all event handler
-							for (index in events) {
-								each(events[index], function () {
-									this.call(element, e);
-								});
-							}
+							// If trigger without namespace, execute default handler
+							if (events['__default']) events['__default'].call(element, e);
 						}
 					};
 				}
@@ -1282,14 +1351,9 @@
 		return self;
 	}
 	// jetObject Prototype
-	jetObject = function() {};
+	jetObject.prototype = [];
 	extend(jetObject.prototype, {
 		constructor: jetObject,
-		// Array-Like Function
-		length: 0,
-		push: arraymodel.push,
-		sort: arraymodel.sort,
-		splice: arraymodel.splice,
 		selector: '',
 		// - .merge(object)
 		// Merge a set of elements into current set of matched elements that not be added or duplicate.
@@ -1298,11 +1362,11 @@
 		// - 
 		merge: function(object) {
 			var self = this;
+			each(this, function() {
+				this.add = true;
+			});
 			if (core.isCollection(object)) {
-				each(this, function() {
-					this.added = true;
-				});
-				each(this, function() {
+				each(object, function() {
 					if (core.isElement(this) && !this.added) {
 						this.added = true;
 						self.push(this);
@@ -1458,7 +1522,7 @@
 							});
 						}
 					} else {
-						jet.css(obj, 'display', 'block');
+						jetObj.css('display', 'block');
 						if (core.isFunction(callback)) {
 							callback.call(this);
 						}
@@ -1482,6 +1546,8 @@
 					} else {
 						return jet(this[start]);
 					}
+				} else {
+					return jet(this[start]);
 				}
 			}
 			return new jetObject();
@@ -1555,17 +1621,11 @@
 		// - 
 		off: function (event, selector) {
 			if (core.isDefined(event) && event) {
-				if (!core.isDefined(selector)) {
-					if (core.isDefined(document.body.jLiveEvent)) {
-						document.body.jLiveEvent.detach(event, selector);
+				each((!core.isDefined(selector)) ? [document.body] : this, function() {
+					if (core.isDefined(this.jLiveEvent)) {
+						this.jLiveEvent.detach(event, selector);
 					}
-				} else {
-					each(this, function() {
-						if (core.isDefined(this.jLiveEvent)) {
-							this.jLiveEvent.detach(event, selector);
-						}
-					});
-				}
+				});
 			}
 		},
 		// - .bind(event, callback)
@@ -1586,7 +1646,7 @@
 						if (core.isElement(this) || core.isWindow(this)) {
 							this.jEvent = this.jEvent || {};
 							if (!this.jEvent[evt[1]]) {
-								this.jEvent[evt[1]] = jEvent(this);
+								this.jEvent[evt[1]] = jEvent(this, evt[1]);
 								if (this.addEventListener) {
 									this.addEventListener(evt[1], this.jEvent[evt[1]].getHandler(), false);
 								} else if (this.attachEvent) {
@@ -1741,11 +1801,16 @@
 		text: function(value) {
 			if (core.isDefined(value)) {
 				each(this, function() {
-					this.innerText = (core.isFunction(value)) ? value.call(this.value) : value;
+					this.innerText = (core.isFunction(value)) ? value.call(this.innerText) : value;
 				});
+				return this;
 			} else {
 				var elem = this[0];
 				if (core.isElement(elem)) {
+					if (core.isDefined(elem.type))
+					if (core.isDefined(elem.type) && elem.type.indexOf('select') !== false) {
+						return elem.options[elem.selectedIndex].innerHTML;
+					}
 					return elem.innerText;
 				}
 				return '';
@@ -1829,7 +1894,7 @@
 				}
 				offsetParent = offsetParent.offsetParent;
 			}
-			return offsetParent || docElem;
+			return jet(offsetParent || docElem);
 		},
 		// - .boxRect()
 		// Get the first element's BoundingClientRect() of the set of matched elements, adjust the offset in IE.
@@ -1861,6 +1926,25 @@
 			}
 			return null;
 		},
+		// - .inViewport(fullElementDisplay)
+		// Get the first element's is visble in viewport or not.
+		// @return {Boolean}
+		// @added 1.0.7-Beta
+		// - 
+		inViewport: function() {
+			var boxRect = this.boxRect();
+			if (!boxRect) {
+				return false;
+			}
+
+		    return (
+				boxRect.top + boxRect.height >= 0 &&
+				boxRect.left + boxRect.width >= 0 &&
+				boxRect.bottom <= (win.innerHeight || docElem.clientHeight) &&
+				boxRect.right <= (win.innerWidth || docElem.clientWidth)
+		    );
+		},
+
 		// - .height([value])
 		// Get the first element's height of the set of matched elements or set the height for every matched element.
 		// @param {Number} value The value of height to set.
@@ -1983,9 +2067,15 @@
 		parent: function(selector) {
 			var elem = this[0],
 				parent;
-			if (!elem) return null;
-			parent = jet(elem.parentNode);
-			return (parent.length > 0 && (!selector || parent.is(selector))) ? parent : jet();
+			if (!elem) return jet();
+			while (elem = elem.parentNode) {
+				if (!selector) {
+					return (elem) ? jet(elem) : jet();
+				} else if (jet(elem).is(selector)) {
+					return jet(elem);
+				}
+			}
+			return jet();
 		},
 		// - .parents([selector])
 		// Get the ancestors from first element of the set of matched element, optionally filtered by a selector.
@@ -2036,16 +2126,25 @@
 			var y = 0,
 				elem = this[0];
 			if (core.isDefined(value)) {
-				value = parseInt(value);
-				win.scrollTo(this.scrollLeft(), value);
+				if (core.isJetObject(value)) {
+					console.log(value.boxRect());
+				} else if (core.isElement(value)) {
+					value = jet(value).scrollTop();
+				} else {
+					value = parseInt(value);
+				}
+				elem.scrollTop = value;
+				console.log(elem, elem.scrollTop);
 				return this;
 			} else {
-				if (core.nodeName(elem, 'body')) {
+				if (elem == doc || elem == win) {
+					y = (win.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
+				} else if (core.nodeName(elem, 'body')) {
 					y = docElem.scrollTop || elem.scrollTop || 0;
 				} else if (core.isElement(elem)) {
 					y = elem.scrollTop || 0;
 				}
-				return y;
+				return (isNaN(y)) ? 0 : y;
 			}
 		},
 		// - .scrollLeft([value])
@@ -2104,6 +2203,32 @@
 			var elem = this[0];
 			return elem[bindmap[event] || 'on' + event] || elem[event];
 		},
+		// - .values()
+		// Encode a set of form elements as a object
+		// @return {PlainObject}
+		values: function() {
+			var elem = this[0], returns = {};
+			if (core.isDefined(elem) && core.nodeName(elem, 'form') && elem.elements) {
+				jet(elem.elements).filter(function() {
+					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
+						return true;
+					}
+					return false;
+				}).each(function(i, elem) {
+					var value = jet(elem).value(), matches = elem.name.match(/(.+)\[(.+)\]/);
+					if (matches) {
+						if (!core.isDefined(returns[matches[1]])) {
+							returns[matches[1]] = {};
+						}
+						returns[matches[1]][matches[2]] = value;
+					} else {
+						returns[elem.name] = value;
+					}
+				});
+			}
+			return returns;
+		},
+
 		// - .serialize()
 		// Encode a set of form elements as a string for submission.
 		// @return {String}
@@ -2121,20 +2246,21 @@
 					if (core.isArray(value)) {
 						return jet.walk(value, function() {
 							return {
-								name: elem.name,
+								name: elem.name + '[]',
 								value: this
 							};
 						});
 					} else {
 						return {
 							name: elem.name,
-							value: elem.value
+							value: value
 						};
 					}
 				}));
 			}
 			return '';
 		},
+
 		// - jet.hasClass(classes)
 		// Check the first element of the set of matched elements has included one or more classes.
 		// @param {DOMElement} element The element to check the class.
@@ -2149,7 +2275,7 @@
 			} else if (!core.isArray(classes)) {
 				classes = [];
 			}
-			return core.hasClass(classes);
+			return core.hasClass(elem, classes);
 		}
 	});
 	// .first() and .last()
@@ -2167,32 +2293,37 @@
 		jetObject.prototype[this] = (function(name) {
 			return function() {
 				var element = this[0];
-				if (core.isElement(element)) {
+				if (element && core.isElement(element)) {
 					return jet(childElement(element, name));
 				}
 				return null;
 			};
 		})(this);
 	});
-	// .next() and .previous()
+
+	// .next() and .prev()
 	// - .next()
 	// Get next child element from the first element of a set of matches elements. Equivalent as jet.is(':first-child').
 	// @return {JetObject}
 	// @added 1.1.0
 	// - 
-	// - .previous()
+	// - .prev()
 	// Get previous child element from the first element of a set of matches elements. Equivalent as jet.is(':first-child').
 	// @return {JetObject}
 	// @added 1.1.0
 	// - 
-	each('next prev'.split(' '), function() {
-		jetObject.prototype[this] = (function(name) {
-			return function() {
+	each('next previous'.split(' '), function() {
+		jetObject.prototype[this.substring(0, 4)] = (function(name) {
+			return function(selector) {
 				var element = this[0];
 				if (core.isElement(element)) {
-					return jet(siblingElement(element, name));
+					while (element = siblingElement(element, name)) {
+						if (!core.isDefined(selector) || jet(element).is(selector)) {
+							return jet(element);
+						}
+					}
 				}
-				return null;
+				return jet();
 			};
 		})(this);
 	});
@@ -2270,16 +2401,26 @@
 	// @return {jetObject}
 	// @added 1.0.2-Beta
 	// - 
-	each('click dblClick focus blur change select mouseOver mouseOut load unload submit mouseDown mouseUp mouseMove'.split(' '), function() {
+	// - .scroll(callback)
+	// Apply or trigger OnScroll event to each of the set of matched elements.
+	// @param {Function} callback The callback function thet will be applied.
+	// @return {jetObject}
+	// @added 1.0.4
+	// - 
+	each('click dblClick focus blur change select mouseOver mouseOut load unload submit mouseDown mouseUp mouseMove scroll'.split(' '), function() {
 		(function(event) {
 			jetObject.prototype[event] = function(callback) {
-				return this.bind(event.toLowerCase(), callback);
+				if (core.isDefined(callback)) {
+					return this.bind(event.toLowerCase(), callback);
+				}
+				this.trigger(event);
+				return this;
 			};
 		})(this);
 	});
 	// Append and Preppend function
 
-	function insertTo(target, element, isAppend) {
+	function insertTo(target, element, isAppend, isInsert) {
 		var contents, length = (target.length) ? target.length - 1 : 0;
 		if (core.isCollection(element) && element.length > 0) {
 			contents = element;
@@ -2288,18 +2429,36 @@
 		} else if (core.isElement(element)) {
 			contents = [element];
 		}
+	
 		if (contents) {
 			each(target, function(i, el) {
 				if (!core.isDefined(el.nodeType)) {
 					return;
 				}
+
 				el = (el.nodeType === 1) ? el : core.owner(el).document.body;
 				each(contents, function(j, insert) {
-					var last = (length === i) ? true : false;
-					if (isAppend) {
-						el.appendChild((last) ? insert : insert.cloneNode(true));
+					var last = (length === i) ? true : false, parent;
+
+					if (isInsert) {
+						if (el.nodeType === 1) {
+							parent = el.parentNode;
+							if (isAppend) {
+								if (parent.lastchild == el) {
+									parent.appendChild((last) ? insert : insert.cloneNode(true), el.nextSibling);
+								} else {
+									parent.insertBefore((last) ? insert : insert.cloneNode(true), el.nextSibling);
+								}
+							} else {
+								parent.insertBefore((last) ? insert : insert.cloneNode(true), el);
+							}
+						}
 					} else {
-						el.insertBefore((last) ? insert : insert.cloneNode(true), el.childNodes[0]);
+						if (isAppend) {
+							el.appendChild((last) ? insert : insert.cloneNode(true));
+						} else {
+							el.insertBefore((last) ? insert : insert.cloneNode(true), el.childNodes[0]);
+						}
 					}
 				});
 			});
@@ -2308,6 +2467,14 @@
 	}
 
 	extend(jetObject.prototype, {
+		after: function(element) {
+			insertTo(this, element, true, true);
+			return this;
+		},
+		before: function(element) {
+			insertTo(this, element, false, true);
+			return this;
+		},
 		// - .append(element)
 		// Insert content to the end of each element in the set of matched elements.
 		// @param {Object} element The array, array-like object, string or DOM element that will be inserted.
@@ -2524,7 +2691,7 @@
 						each(classname, function() {
 							elemClass = elemClass.replace(new RegExp(' ' + this + ' '), ' ');
 						});
-						trim(elemClass);
+						elemClass = trim(elemClass);
 						if (!elemClass) {
 							elem.removeAttribute('class');
 						} else {
@@ -2629,8 +2796,80 @@
 		}
 		return isNaN(target) || target === 'auto' ? 0 : target;
 	}
-	// jet Unit
 
+	// jet Color Object
+	function jColor(value) {
+		var self = {
+			R: 0,
+			G: 0,
+			B: 0,
+			A: 255,
+			subtract: function (value) {
+				var color = jColor(value);
+				each(['R', 'G', 'B'], function () {
+					self[this] -= color[this];
+					if (self[this] <= 0) self[this] = 0;
+				});
+				return self;
+			},
+			mix: function (value) {
+				var color = jColor(value);
+				each(['R', 'G', 'B'], function () {
+					self[this] += color[this];
+					if (self[this] > 255) self[this] = 255;
+				});
+				return self;
+			},
+			diff: function (value, percentage) {
+				var target = clone(value);
+
+				percentage = parseFloat(percentage);
+				percentage = (percentage > 1) ? 1 : percentage;
+
+				each(['R', 'G', 'B'], function () {
+					if (self[this] > target[this]) {
+						target[this] = self[this] - Math.ceil((self[this] - target[this]) * percentage);
+					} else {
+						target[this] = self[this] + Math.ceil((target[this] - self[this]) * percentage);
+					}
+				});
+				return target;
+			},
+			toHex: function () {
+				var hex = '', self = this;
+				each(['R', 'G', 'B'], function () {
+					hex += ((self[this] < 16) ? '0' : '') + self[this].toString(16);
+				});
+				return '#' + hex;
+			},
+			toFullHex: function () {
+				var hex = '';
+				each(['R', 'G', 'B', 'A'], function () {
+					hex += ((self[this] < 16) ? '0' : '') + self[this].toString(16);
+				});
+				return '#' + hex;
+			}
+		};
+		if (jet.isString(value)) {
+			if (regex.colorRegex.test(value) || regex.hexRegex.test(value)) {
+				if (matches = regex.hexRegex.exec(jet.trim(value))) {
+					self.R = parseInt(matches[1], 16);
+					self.G = parseInt(matches[2], 16);
+					self.B = parseInt(matches[3], 16);
+					if (matches[4]) {
+						self.A = parseInt(matches[4], 16);
+					}
+				} else if (matches = regex.colorRegex.exec(jet.trim(value))) {
+					self.R = parseInt(matches[1], 10);
+					self.G = parseInt(matches[2], 10);
+					self.B = parseInt(matches[3], 10);
+				}
+			}
+		}
+		return self;
+	};
+	
+	// jet Unit
 	function jUnit(elem, prop) {
 		var value, color, cssNumber = {
 			'columnCount': true,
@@ -2655,6 +2894,7 @@
 						return jHooks.unit[this.property].parseDiff.call(this, value);
 					}
 					this.diff = getStyle(this.element, this.property, value) - this.pixel;
+
 					return this;
 				},
 				take: function(percentage) {
@@ -2665,7 +2905,7 @@
 				}
 			};
 		if (elem.length && core.isDefined(prop)) {
-			self.property = core.camelCase(prop);
+			self.property = prop;
 			self.element = elem;
 			if (jHooks.unit[prop] && jHooks.unit[prop].init) {
 				jHooks.unit[prop].init.call(self, value, elem);
@@ -2865,18 +3105,32 @@
 				day = 0,
 				time = {},
 				monthString = {
-					1: 'January',
-					2: 'February',
-					3: 'March',
-					4: 'April',
-					5: 'May',
-					6: 'June',
-					7: 'July',
-					8: 'August',
-					9: 'September',
-					10: 'October',
-					11: 'November',
-					12: 'December'
+					0: 'January',
+					1: 'February',
+					2: 'March',
+					3: 'April',
+					4: 'May',
+					5: 'June',
+					6: 'July',
+					7: 'August',
+					8: 'September',
+					9: 'October',
+					10: 'November',
+					11: 'December'
+				},
+				monthMap = {
+					'Jan': 0,
+					'Feb': 1,
+					'Mar': 2,
+					'Apr': 3,
+					'May': 4,
+					'Jun': 5,
+					'Jul': 6,
+					'Aug': 7,
+					'Sep': 8,
+					'Oct': 9,
+					'Nov': 10,
+					'Dec': 11
 				},
 				weekdayString = {
 					0: 'Sunday',
@@ -2896,29 +3150,33 @@
 					Fri: 6,
 					Sat: 7
 				},
+
 				self = {
 					parseTime: function(value) {
 						var delimited, subValue;
-						delimited = value.split(':');
 						time = {
 							hour: 0,
 							minute: 0,
 							second: 0,
 							millis: 0
 						};
-						if (delimited.length === 3) {
-							time.hour = parseInt(delimited[0]);
-							time.minute = parseInt(delimited[1]);
-							if (delimited[2].indexOf('.') !== -1) {
-								subValue = delimited[2].split('.');
-								time.second = parseInt(subValue[0]);
-								time.millis = parseInt(subValue[1]);
-							} else {
-								time.second = parseInt(delimited[2]);
-								time.millis = 0;
+
+						if (value) {
+							delimited = value.split(':');
+							if (delimited.length === 3) {
+								time.hour = parseInt(delimited[0]);
+								time.minute = parseInt(delimited[1]);
+								if (delimited[2].indexOf('.') !== -1) {
+									subValue = delimited[2].split('.');
+									time.second = parseInt(subValue[0]);
+									time.millis = parseInt(subValue[1]);
+								} else {
+									time.second = parseInt(delimited[2]);
+									time.millis = 0;
+								}
 							}
-							return self;
 						}
+						return self;
 					},
 					parseDate: function(value) {
 						var dateString, delimited, subValue;
@@ -2926,20 +3184,12 @@
 							return self.parseDate(new Date(value));
 						} else if (core.isFunction(value.getFullYear)) {
 							date = value;
-							year = date.getFullYear();
-							month = date.getMonth() + 1;
-							day = date.getDate();
-							time = {
-								hour: date.getHours(),
-								minute: date.getMinutes(),
-								second: date.getSeconds(),
-								millis: date.getMilliseconds()
-							};
+							dateReset();
 							return self;
 						} else if (matches = regex.timestamp.exec(value)) {
 							// 2014-03-25T08:48:21Z or 2014-03-25T08:48:21+08:00
 							year = parseInt(matches[1]);
-							month = parseInt(matches[2]);
+							month = parseInt(matches[2]) - 1;
 							day = parseInt(matches[3]);
 							time = {
 								hour: parseInt(matches[4]),
@@ -2951,29 +3201,95 @@
 							dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
 							delimited = dateString.split(' ');
 							switch (delimited.length) {
+							case 1:
+								// 2014-03-25 date only
+								if (delimited[0].indexOf('/') !== -1) {
+									subValue = delimited[0].split('/');
+								} else {
+									subValue = delimited[0].split('-');
+								}
+								month = parseInt(subValue[1]) - 1;
+								day = parseInt(subValue[2]);
+								year = parseInt(subValue[0]);
+								self.parseTime();
+								break;
 							case 3:
 								// 2014-03-25 08:48:21.125 or 2014/03/25 08:48:21.125
 								if (delimited[0].indexOf('/') !== -1) {
 									subValue = delimited[0].split('/');
 								} else {
-									subValue = delimited[0].split('.');
+									subValue = delimited[0].split('-');
 								}
-								month = parseInt(subValue[0]);
-								day = parseInt(subValue[1]);
-								year = parseInt(subValue[2]);
-								time = self.parseTime(delimited[1]);
+								month = parseInt(subValue[1]) - 1;
+								day = parseInt(subValue[2]);
+								year = parseInt(subValue[1]);
+								self.parseTime(delimited[1]);
+								break;
 							case 6:
 								// Tue Mar 25 2014 08:48:21 GMT+0800
-								month = weekdayMap[delimited[1]] || '';
+								month = monthMap[delimited[1]] || '';
 								day = parseInt(delimited[2]);
 								year = parseInt(delimited[3]);
-								time = self.parseTime(delimited[4]);
+								self.parseTime(delimited[4]);
 								break;
 							default:
 								// Not matched
 							}
 						}
 						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
+						// Reset the date to current time if date object is invalid
+						if (isNaN(date.getTime())) {
+							date = new Date();
+							dateReset();
+						}
+						return self;
+					},
+					getFirstDate: function() {
+						return new Date(year, month, 1, 0, 0, 0, 0);
+					},
+					getLastDate: function() {
+						var date = 30;
+						if (month % 7 % 2 == 0) {
+							date = 31;
+						} else if (month == 1) {
+							date = (year % 4 == 0) ? 29 : 28;
+						}
+						return new Date(year, month, date, 23, 59, 59, 0);
+					},
+					value: function() {
+						return date;
+					},
+					getDateTime: function() {
+						return {
+							year: year,
+							month: month,
+							day: day,
+							time: time
+						};	
+					},
+					setYear: function(value) {
+						year = parseInt(value);
+						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
+
+						return self;
+					},
+					setMonth: function(value) {
+						month = (core.isDefined(monthMap[value])) ? monthMap[value] : parseInt(value);
+						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
+
+						return self;
+					},
+					setDay: function(value) {
+						day = parseInt(value);
+						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
+
+						return self;
+					},
+					addDay: function(value) {
+						value = parseInt(value);
+						date = new Date(year, month, day + value, time.hour, time.minute, time.second, time.millis);
+						dateReset();
+
 						return self;
 					},
 					toString: function(format) {
@@ -2982,11 +3298,11 @@
 							'yyy': [false, date.getFullYear()],
 							'yy': [true, 'yyyy'],
 							'y': [true, 'yyyy'],
-							'MMMM': [false, monthString[date.getMonth() + 1]],
-							'MMM': [true, 'MMMM'],
+							'MMMM': [false, monthString[date.getMonth()]],
+							'MMM': [false, monthString[date.getMonth()].substring(0, 3)],
 							'MM': [false, date.getMonth() + 1],
 							'M': [true, 'MM'],
-							'dddd': [false, weekdayString[date.getDay() + 1]],
+							'dddd': [false, weekdayString[date.getDay()]],
 							'ddd': [true, 'dddd'],
 							'dd': [false, date.getDate()],
 							'd': [true, 'd'],
@@ -3010,13 +3326,25 @@
 									return regexmap[regexmap[pattern][1]][1];
 								} else {
 									value = regexmap[pattern][1];
-									return (pattern.length === 1) ? value : (new Array(pattern.length + 1).join('0') + value).substr((value + '').length);
+									return (pattern.length === 1 || !core.isNumeric(value)) ? value : (new Array(pattern.length + 1).join('0') + value).substr((value + '').length);
 								}
 							}
 							return pattern;
 						});
 					}
 				};
+
+				function dateReset() {
+					year = date.getFullYear();
+					month = date.getMonth();
+					day = date.getDate();
+					time = {
+						hour: date.getHours(),
+						minute: date.getMinutes(),
+						second: date.getSeconds(),
+						millis: date.getMilliseconds()
+					};
+				}
 			self.parseDate(value);
 			return self;
 		}
@@ -3195,11 +3523,15 @@
 	jet.developer(function() {
 		this.registerValueHook('select', function(element, value) {
 			var returns = [];
+
 			if (core.isDefined(value)) {
 				value = (!core.isArray(value)) ? [value] : value;
 				each(element.options, function() {
 					this.selected = core.inArray(value, this.value);
 				});
+				// Trigger Change event
+				jet(element).change();
+
 				return this;
 			} else {
 				if (element.multiple) {
@@ -3218,14 +3550,27 @@
 	each('checkbox radio'.split(' '), function(i, type) {
 		jet.developer(function() {
 			this.registerValueHook(type, function(element, value) {
+				var name = element.name, values;
+				
 				if (core.isDefined(value)) {
 					if (core.isString(value)) {
 						value = [value];
 					}
-					element.checked = core.inArray(value, element.value);
+					if (core.inArray(value, element.value)) {
+						jet(element).attr('checked', 'checked');
+					} else {
+						jet(element).removeAttr('checked');
+					}
+
+					// Trigger Change event
+					jet(element).change();
+
 					return this;
 				} else {
-					if (element.checked) {
+					if (element.type == 'radio') {
+						values = jet('input[name="' + name + '"]:checked').attr('value');
+						return values || 'on';
+					} else {
 						return element.value || 'on';
 					}
 					return null;
@@ -3238,7 +3583,7 @@
 		jet.developer(function() {
 			this.registerUnitHook(prop, {
 				take: function(percentage) {
-					return this.pixel.diff(this.diff, percentage).toHex;
+					return this.pixel.diff(this.diff, percentage).toHex();
 				},
 				parseDiff: function(value) {
 					this.diff = jColor(value);
@@ -3288,7 +3633,8 @@
 			core.registerUnitHook(prop, {
 				init: function(value, element) {
 					this.pixel = getStyle(element, prop);
-					if (this.pixel === 0) this.pixel = element.boxRect()[prop];
+
+					if (isNaN(this.pixel)) this.pixel = element.boxRect()[prop];
 					return this;
 				}
 			});
