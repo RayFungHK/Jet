@@ -1192,7 +1192,12 @@
 	// Get Event Object
 	function getEventObject(element, event, namespace) {
 		var evtobj;
-		if (doc.createEvent) {
+		if (Event) {
+			var evtobj = new Event(event, {
+	            'bubbles'    : true, // Whether the event will bubble up through the DOM or not
+	            'cancelable' : true  // Whether the event may be canceled or not
+	        });
+		} else if (doc.createEvent) {
 			if (/(mouse.+)|((un)?click)/i.test(event)) {
 				evtobj = doc.createEvent('MouseEvents');
 			} else {
@@ -1303,6 +1308,7 @@
 			self = {
 				element: null,
 				add: function(namespace, callback) {
+					if (!namespace) namespace = '__default';
 					if (core.isEmpty(events)) {
 						nativeEvent = getNativeEvent(element, evt);
 					}
@@ -1323,6 +1329,9 @@
 					events = {};
 					return this;
 				},
+				isEmpty: function() {
+					return jet.isEmpty(events);
+				},
 				getHandler: function() {
 					return function(e) {
 						var index;
@@ -1330,7 +1339,7 @@
 						e = e || win.event;
 						(function (evt) {
 							self.trigger = function () {
-								nativeEvent.call(element, evt);
+								return nativeEvent.call(element, evt);
 							}
 						})(e);
 						e.nativeEvent = self.trigger;
@@ -1338,11 +1347,11 @@
 						// If trigger with namespace, call the specify event handler
 						if (core.isDefined(e.namespace) && e.namespace) {
 							if (core.isDefined(events[e.namespace])) {
-								events[e.namespace].call(element, e);
+								return events[e.namespace].call(element, e);
 							}
 						} else {
 							// If trigger without namespace, execute default handler
-							if (events['__default']) events['__default'].call(element, e);
+							if (events['__default']) return events['__default'].call(element, e);
 						}
 					};
 				}
@@ -1671,21 +1680,18 @@
 			var evt;
 			event = trim(event);
 
-			function callback(e) {
-				return e.preventDefault();
-			}
 			if (evt = regex.eventname.exec(event)) {
 				each(this, function() {
 					if (core.isElement(this) || core.isWindow(this)) {
 						if (this.jEvent && this.jEvent[evt[1]]) {
 							this.jEvent[evt[1]].remove(evt[2]);
-							if (core.isEmpty(this.jEvent[evt[1]])) {
+							if (this.jEvent[evt[1]].isEmpty()) {
 								if (this.removeEventListener) {
-									this.removeEventListener(evt[1], callback, false);
+									this.removeEventListener(evt[1], this.jEvent[evt[1]].getHandler(), false);
 								} else if (this.detachevent) {
-									this.detachevent(bindmap[evt[1]] || 'on' + evt[1], callback);
+									this.detachevent(bindmap[evt[1]] || 'on' + evt[1], this.jEvent[evt[1]].getHandler());
 								} else {
-									this[bindmap[evt[1]] || 'on' + evt[1]] = callback;
+									this[bindmap[evt[1]] || 'on' + evt[1]] = null;
 								}
 								delete this.jEvent[evt[1]];
 							}
