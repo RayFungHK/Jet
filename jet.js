@@ -1010,27 +1010,38 @@
 			var data = {},
 				parser;
 			object = object || {};
-			if (object.dataType === 'xml') {
-				object.parser = function() {
-					var p;
-					if (win.DOMParser) {
-						p = new DOMParser();
-						return p.parseFromString(this, 'text/xml');
-					} else {
-						p = new ActiveXObject('Microsoft.XMLDOM');
-						p.async = false;
-						p.loadXML(this);
-						return p;
-					}
-				};
-			} else {
-				object.parser = function() {
-					if (core.isString(this) && this.length > 0) {
-						return eval('(' + this + ')');
-					}
-					return {};
-				};
-			}
+				if (object.dataType === 'xml') {
+					object.parser = function(response) {
+						var p;
+						try {
+							if (win.DOMParser) {
+								p = new DOMParser();
+								return p.parseFromString(response, 'text/xml');
+							} else {
+								p = new ActiveXObject('Microsoft.XMLDOM');
+								p.async = false;
+								p.loadXML(response);
+								return p;
+							}
+						}
+						catch (error) {
+							return this.reject();
+						}
+					};
+				} else {
+					object.parser = function(response) {
+						var obj = {};
+						if (core.isString(response) && response.length > 0) {
+							try {
+								obj = eval('(' + response + ')');
+							}
+							catch (error) {
+								return this.reject();
+							}
+						}
+						return obj;
+					};
+				}
 			return jet.request(object);
 		},
 		// - jet.request(object)
@@ -1065,7 +1076,7 @@
 					xmlHttp.onreadystatechange = function() {
 						if (xmlHttp.readyState != 4) return;
 						if (xmlHttp.status == 200) {
-							deferred.resolve((core.isFunction(object.parser) ? object.parser.call(xmlHttp.responseText) : xmlHttp.responseText));
+							deferred.resolve((core.isFunction(object.parser) ? object.parser.call(deferred, xmlHttp.responseText) : xmlHttp.responseText));
 						} else {
 							deferred.reject({
 								status: xmlHttp.status,
@@ -1073,31 +1084,39 @@
 							});
 						}
 					};
-					// Request method
-					if (object.method === 'post') {
-						xmlHttp.open('POST', object.url, true);
-						// Set Header
-						if (core.isPlainObject(object.headers)) {
-							for (index in object.headers) {
-								xmlHttp.setRequestHeader(index, object.headers[index]);
-							}
-						}
-						// Set Post Data
-						if (core.isDefined(object.data)) {
-							xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-							if (core.isPlainObject(object.data)) {
-								for (index in object.data) {
-									dataString += (dataString.length) ? '&' + index + '=' + object.data[index] : index + '=' + object.data[index];
+					try {
+						// Request method
+						if (object.method === 'post') {
+							xmlHttp.open('POST', object.url, true);
+							// Set Header
+							if (core.isPlainObject(object.headers)) {
+								for (index in object.headers) {
+									xmlHttp.setRequestHeader(index, object.headers[index]);
 								}
-								xmlHttp.send(dataString);
-							} else {
-								xmlHttp.send(object.data);
 							}
+							// Set Post Data
+							if (core.isDefined(object.data)) {
+								xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+								if (core.isPlainObject(object.data)) {
+									for (index in object.data) {
+										dataString += (dataString.length) ? '&' + index + '=' + object.data[index] : index + '=' + object.data[index];
+									}
+									xmlHttp.send(dataString);
+								} else {
+									xmlHttp.send(object.data);
+								}
+							}
+						} else {
+							// Method 'Get'
+							xmlHttp.open('GET', object.url, true);
+							xmlHttp.send();
 						}
-					} else {
-						// Method 'Get'
-						xmlHttp.open('GET', object.url, true);
-						xmlHttp.send();
+					}
+					catch (err) {
+						deferred.reject({
+							status: xmlHttp.status,
+							text: xmlHttp.statusText
+						});
 					}
 				}
 				return deferred.detach();
