@@ -1832,8 +1832,7 @@
 			} else {
 				var elem = this[0];
 				if (core.isElement(elem)) {
-					if (core.isDefined(elem.type))
-					if (core.isDefined(elem.type) && elem.type.indexOf('select') !== false) {
+					if (core.isDefined(elem.type) && elem.type.indexOf('select') !== -1) {
 						return elem.options[elem.selectedIndex].innerHTML;
 					}
 					return elem.innerText;
