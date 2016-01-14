@@ -324,9 +324,9 @@
 		// @return {String}
 		// - 
 		camelCase: function(text) {
-			return text.replace(/[\-_]([\da-z])/gi, function(str, match) {
+			return (text) ? text.replace(/[\-_]([\da-z])/gi, function(str, match) {
 				return match.toUpperCase();
-			});
+			}) : '';
 		},
 		// - core.inArray(items, compare)
 		// Check to see if an object is included in a specified array.
@@ -1025,7 +1025,7 @@
 							}
 						}
 						catch (error) {
-							return this.reject();
+							return null;
 						}
 					};
 				} else {
@@ -1036,7 +1036,7 @@
 								obj = eval('(' + response + ')');
 							}
 							catch (error) {
-								return this.reject();
+								return null;
 							}
 						}
 						return obj;
@@ -1074,9 +1074,22 @@
 					}
 					// Bind onReadyStateChange event
 					xmlHttp.onreadystatechange = function() {
+						var response;
 						if (xmlHttp.readyState != 4) return;
 						if (xmlHttp.status == 200) {
-							deferred.resolve((core.isFunction(object.parser) ? object.parser.call(deferred, xmlHttp.responseText) : xmlHttp.responseText));
+							if (core.isFunction(object.parser)) {
+								response = object.parser.call(deferred, xmlHttp.responseText);
+								if (response === null) {
+									deferred.reject({
+										status: xmlHttp.status,
+										text: 'Fail to parse target object'
+									});
+								} else {
+									deferred.resolve(response);
+								}
+							} else {
+								deferred.resolve(xmlHttp.responseText);
+							}
 						} else {
 							deferred.reject({
 								status: xmlHttp.status,
@@ -2231,9 +2244,14 @@
 		// Encode a set of form elements as a object
 		// @return {PlainObject}
 		values: function() {
-			var elem = this[0], returns = {};
-			if (core.isDefined(elem) && core.nodeName(elem, 'form') && elem.elements) {
-				jet(elem.elements).filter(function() {
+			var elem = this[0], returns = {}, formset;
+			if (core.isDefined(elem)) {
+				if (core.nodeName(elem, 'form') && elem.elements) {
+					formset = elem.elements
+				} else {
+					formset = this.find('*');
+				}
+				jet(formset).filter(function() {
 					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
 						return true;
 					}
@@ -2258,9 +2276,14 @@
 		// @return {String}
 		// - 
 		serialize: function() {
-			var elem = this[0];
-			if (core.isDefined(elem) && core.nodeName(elem, 'form') && elem.elements) {
-				return jet.buildQueryString(jet(elem.elements).filter(function() {
+			var elem = this[0], formset;
+			if (core.isDefined(elem)) {
+				if (core.nodeName(elem, 'form') && elem.elements) {
+					formset = elem.elements
+				} else {
+					formset = this.find('*');
+				}
+				return jet.buildQueryString(jet(formset).filter(function() {
 					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
 						return true;
 					}
@@ -2300,6 +2323,62 @@
 				classes = [];
 			}
 			return core.hasClass(elem, classes);
+		},
+
+		// - .hasClass(classes)
+		// Check the first element of the set of matched elements is checkable or not.
+		// @return {Boolean}
+		// - 
+		checkable: function() {
+			var elem = this[0];
+			return (regex.submitName.test(elem.tagName) && !elem.disabled && regex.checkable.test(elem.type));
+		},
+
+		// - .check()
+		// Check a set of checkbox or radiobox.
+		// @return {JetObject}
+		// - 
+		check: function() {
+			each(this, function() {
+				if (jet(this).checkable()) {
+					jet(this).attr('checked', 'checked');
+					jet(this).prop('checked', true);
+				}
+			});
+			return this;
+		},
+
+		// - .uncheck()
+		// Uncheck a set of checkbox or radiobox.
+		// @return {JetObject}
+		// - 
+		uncheck: function() {
+			each(this, function() {
+				if (jet(this).checkable()) {
+					jet(this).removeProp('checked');
+					jet(this).removeAttr('checked');
+				}
+			});
+			return this;
+		},
+
+		// - .checked()
+		// Return the first element of the set of matched elements is checked or not or check or uncheck all matched elements
+		// @param {Boolean} ischeck Check or Uncheck
+		// @return {JetObject|Boolean}
+		// - 
+		checked: function(ischeck) {
+			if (jet.isDefined(ischeck)) {
+				if (!!ischeck) {
+					this.check();
+				} else {
+					this.uncheck();
+				}
+				return this;
+			} else {
+				var elem = jet(this[0]);
+				return elem.is(':checked') || elem.prop('checked');
+			}
 		}
 	});
 	// .first() and .last()
@@ -2964,7 +3043,7 @@
 					return (Math.cos(((1 - percent) / 2) * Math.PI));
 				}
 			},
-			acceptedProp = /^scroll(Left|Top)|width|height|left|top|right|bottom|opacity|fontSize|color|backgroundColor|border((Left|Right|Top|Bottom)?Width)|lineHeight|padding(Left|Right|Top|Bottom)?|margin(Left|Right|Top|Bottom)?$/,
+			acceptedProp = /^scroll(Left|Top)|width|height|left|top|right|bottom|opacity|fontSize|color|backgroundColor|border((Left|Right|Top|Bottom)?Width)|lineHeight|padding(Left|Right|Top|Bottom)?|margin(Left|Right|Top|Bottom)?|zoom$/,
 			self = {
 				apply: function(css, duration, easing, callback) {
 					var index, values = {},
