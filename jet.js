@@ -468,6 +468,8 @@
 		if (!core.isDefined(object) || !object) return object;
 		if (object instanceof Date) {
 			
+		} else if (core.isDefined(object.cloneNode)) {
+			return object.cloneNode(true);
 		} else if (core.isObject(object) || core.isJetObject(object)) {
 			newObject = {};
 			for (index in object) {
@@ -1109,12 +1111,15 @@
 							}
 							// Set Post Data
 							if (core.isDefined(object.data)) {
-								xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-								if (core.isPlainObject(object.data)) {
+								if (object.data.constructor != FormData && core.isPlainObject(object.data)) {
+									xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
 									for (index in object.data) {
 										dataString += (dataString.length) ? '&' + index + '=' + object.data[index] : index + '=' + object.data[index];
 									}
 									xmlHttp.send(dataString);
+								} else if (core.isString(object.data)) {
+									xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
+									xmlHttp.send(object.data);
 								} else {
 									xmlHttp.send(object.data);
 								}
@@ -1814,6 +1819,7 @@
 						if (core.isDefined(this.value)) {
 							setValue = (core.isFunction(value)) ? value.call(this.value) : value;
 							this.value = setValue;
+							jet(this).attr('value', setValue);
 						}
 					}
 				});
@@ -2239,6 +2245,28 @@
 		handler: function(event) {
 			var elem = this[0];
 			return elem[bindmap[event] || 'on' + event] || elem[event];
+		},
+		// - .formdata()
+		// Encode a set of form elements as a FormData object
+		// @return {FormData}
+		formdata: function() {
+			var elem = this[0], returns = {}, formset, formdata = new FormData();
+			if (core.isDefined(elem)) {
+				if (core.nodeName(elem, 'form') && elem.elements) {
+					formset = elem.elements
+				} else {
+					formset = this.find('*');
+				}
+				jet(formset).filter(function() {
+					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
+						return true;
+					}
+					return false;
+				}).each(function(i, elem) {
+					formdata.append(elem.name, elem.value);
+				});
+			}
+			return formdata;
 		},
 		// - .values()
 		// Encode a set of form elements as a object
