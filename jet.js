@@ -1,36 +1,33 @@
-(function() {
-	var jet, core, win = window,
-		doc = window.document,
+(function(global) {
+	"use strict";
+	var win = window,
+		doc = document,
 		nav = navigator,
+		scriptLoad = doc.getElementsByTagName('script'),
+		jetScript = scriptLoad[scriptLoad.length - 1],
+		queryString = jetScript.src.replace(/^[^\?]+\??/, ''),
 		docElem = doc.documentElement,
-		slice = Array.prototype.slice,
-		objmodel = Object.prototype,
-		typeCache = {},
-		hasOwn = objmodel.hasOwnProperty,
-		onLoadEvent = [],
-		arraymodel = [],
-		iframe = null,
-		defaultStyles = {},
+		JetObject = function() {},
+		ary = Array.prototype,
+		slice = ary.slice,
+		some = ary.some,
+		toString = Object.prototype.toString,
+		fnToString = Function.prototype.toString,
 		container = doc.createElement('div'),
-		regex = {
-			selector: /(([\.#])?([a-z0-9_\-]+|\*)([#\.][^\s#,\.]+)*((?:\[[^:]*\]|:[a-z\-]+(\([^\)]+\))?)+)*(\s*[+>~]\s*|\s*,?\s*))+?/gi,
-			subAttr: /([#\.])([^#\.]+)/gi,
-			attribute: /\[([a-z_]+)(([~!\|\^$\*]?)=((\"(.*)\")|(\'(.*)\')|([0-9a-z_\-]*)))?\]/gi,
-			pseudo: /:([a-z\-]+)(\(([^\)]+)\))?/gi,
-			nth: /nth(-(last))?-(child|of-type)/i,
-			nthValue: /(-)?((([0-9]*)n)|([0-9]+))(([+\-])([0-9]+))?/i,
-			submitType: /^(submit|button|image|reset|file)$/i,
-			submitName: /^(input|select|textarea|keygen)$/i,
-			checkable: /^(checkbox|radio)$/i,
-			eventname: /^(\w*)(\.([\w_\-]+))?$/i,
-			unit: /(-?[0-9\.]+)\s*([a-z%]*)/i,
-			colorRegex: /rgb\(([0-9]+),\s*([0-9]+),\s*([0-9]+)\)/i,
-			hexRegex: /([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})([a-f0-9]{2})?/i,
-			type: /\[object ([a-z]+)\]/i,
-			timestamp: /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(\+[0-9]{2}:[0-9]{2}|Z)?/,
-			dateformat: /([y]{1,4}|[M]{1,4}|[d]{1,4}|hh|h|HH|H|mm|m|ss|s|tt|t|f|q)/g
+		Jet, fn,
+		onLoadEvent = [],
+		onHold = false,
+		conflict = null,
+		styles = win.getComputedStyle(docElem, ''),
+		allType = '*/'.concat('*'),
+		eventBindmap = {
+			'DOMContentLoaded': 'onload'
 		},
-		attrmap = {
+		propBindmap = {
+			'for': 'htmlFor',
+			'class': 'className'
+		},
+		attrBindmap = {
 			'accesskey': 'accessKey',
 			'class': 'className',
 			'colspan': 'colSpan',
@@ -43,1199 +40,2431 @@
 			'cellspacing': 'cellSpacing',
 			'cellpadding': 'cellPadding'
 		},
-		propmap = {
-			'for': 'htmlFor',
-			'class': 'className'
-		},
-		bindmap = {
-			'DOMContentLoaded': 'onload'
-		},
-		boxAdjust = null,
-		// Hooks
-		jHooks = {
-			css: {},
-			value: {},
-			prop: {},
-			unit: {}
-		},
-		jetObject = function() {};
-	jet = function(selector, context) {
-		var jetObj;
+		resetAnimation = 'animation-duration animation-direction animation-timing-function animation-name animation-iteration-count animation-delay animation-fillmode',
+		easingType = '^(linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|cubic-bezier\\(-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?\\))$',
+		transitionFormula = new RegExp('([\\w-]+)\\s(\\d*(?:\\.\\d+)?m?s)\\s' + easingType + '\\s(\\d*(?:\\.\\d+)?m?s),?', 'g'),
+		regexLength = '((\\\d+(?:\\\.\\\d+)?)\\\s*(em|ex|%|px|cm|mm|in|pt|pc|ch|rem|vh|vw|vmin|vmax))',
+		regexUnit = new RegExp('^\\\s*(?:' + regexLength + '|(auto))\\\s*$'),
+		regexCheckable = /^(checkbox|radio)$/i,
+		regexSubmitType = /^(submit|button|image|reset|file)$/i,
+		regexSubmitName = /^(input|select|textarea|keygen)$/i,
+		regexConstructor = /^\[object .+?Constructor\]$/,
+		regexNative = new RegExp('^' + String(toString).replace(/[.*+?^${}()|[\]\/\\]/g, '\\$&').replace(/toString|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'),
+		regexTimestamp = /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})([+-][0-9]{2}:[0-9]{2}|Z)?/,
+		regexUTCGMT = /(UTC|GMT)([+-](?:\d+))?/,
+		regexTransformMethod = /^(css|backface|duration|delay|easing|rotate(X|Y|Z|3d)?|move(X|Y|Z|3d)?|scale(X|Y|Z|3d)?|skew(X|Y)?)$/
 
-		if (core.isDefined(selector)) {
-			if (core.isFunction(selector)) {
-				jet.ready(selector);
-			} else if (core.isElement(selector) || core.isWindow(selector)) {
-				jetObj = new jetObject();
-				jetObj.push(selector);
-				return jetObj;
-			} else if (core.isString(selector)) {
-				if (selector[0] === '<' && selector[selector.length - 1] === '>' && selector.length > 3) {
-					return jet.shift(selector);
-				} else {
-					return querySelector(selector, context, new jetObject());
-				}
-			} else if (core.isCollection(selector)) {
-				jetObj = new jetObject();
-				each(selector, function () {
-					jetObj.merge(jet(this));
-				});
-				return jetObj;
-			}
-		}
-		return new jetObject();
+	// Implement JetObject become an Array-Like object
+	JetObject.prototype = {
+		constructor: JetObject,
+		push: ary.push,
+		indexOf: ary.indexOf,
+		forEach: ary.forEach,
+		some: ary.some,
+		length: 0
 	};
-	// Global Function, can be called in plugin implement
-	core = {
-		// - core.isChrome
-		// Chrome Broswer
-		// @return {Boolean}
-		// -
-		isChrome: /Chrome/.test(nav.userAgent),
-		// - core.isSafari
-		// Safari Broswer
-		// @return {Boolean}
-		// -
-		isSafari: /Apple.*Safari/.test(nav.vendor),
-		// - core.isOpera
-		// Opera Broswer
-		// @return {Boolean}
-		// -
-		isOpera: !! win.opera || nav.userAgent.indexOf(' OPR/') >= 0,
-		// - core.isFirefox
-		// Firefox Broswer
-		// @return {Boolean}
-		// -
-		isFirefox: /Firefox/.test(nav.userAgent),
-		// - core.isIE
-		// IE Broswer
-		// @return {Boolean}
-		// -
-		isIE: /MSIE/.test(nav.userAgent),
-		// - core.getType(object)
-		// Return the type of object 
-		// @param {Object} obj The object for getTypeion.
-		// @return {String} Returns the object type.
-		// -
-		getType: function(object) {
-			var name = objmodel.toString.call(object),
-				type;
-			if (!typeCache[name]) {
-				type = name.split(' ')[1];
-				typeCache[name] = type.substring(0, type.length - 1).toLowerCase();
-			}
-			return typeCache[name];
-		},
-		// - core.isDefined([arguments, ...])
-		// Check to see if one or more object is defined. 
-		// @return {Boolean}
-		// - 
-		isDefined: function() {
-			return walk(arguments, function(object) {
-				return (typeof object !== 'undefined');
-			});
-		},
-		// - core.isWalkable([arguments, ...])
-		// Check to see if one or more object can be Iterated. 
-		// @return {Boolean}
-		// -
-		isWalkable: function() {
-			return walk(arguments, function(object) {
-				return (this.isCollection(object) || this.isPlainObject(object));
-			});
-		},
-		// - core.isJetObject([arguments, ...])
-		// Check to see if one or more object is a jet object. 
-		// @return {Boolean}
-		// -
-		isJetObject: function() {
-			return walk(arguments, function(object) {
-				return (this.isDefined(object) && object.constructor === jetObject);
-			});
-		},
-		// - core.isCollection([arguments, ...])
-		// Check to see if one or more object is a collection or an array. 
-		// @return {Boolean}
-		// -
-		isCollection: function() {
-			return walk(arguments, function(object) {
-				return (this.isDefined(object) && (this.isArray(object) || this.isJetObject(object) || (this.isNumeric(object.length) && this.isFunction(object.item))));
-			});
-		},
-		// - core.isElement([arguments, ...])
-		// Check to see if one or more object is an element object. 
-		// @return {Boolean}
-		// - 
-		isElement: function() {
-			return walk(arguments, function(object) {
-				return (this.isDefined(object) && (object.nodeType === 1 || object.nodeType === 9));
-			});
-		},
-		// - core.isArray([arguments, ...])
-		// Check to see if one or more object is an array. 
-		// @return {Boolean}
-		// - 
-		isArray: function() {
-			return walk(arguments, function(object) {
-				return (this.getType(object) === 'array');
-			});
-		},
-		// - core.isObject([arguments, ...])
-		// Check to see if one or more object is an object. 
-		// @return {Boolean}
-		// - 
-		isObject: function() {
-			return walk(arguments, function(object) {
-				return (this.getType(object) === 'object');
-			});
-		},
-		// - core.isFunction([arguments, ...])
-		// Check to see if one or more object is a callback function. 
-		// @return {Boolean}
-		// - 
-		isFunction: function() {
-			return walk(arguments, function(object) {
-				return (this.getType(object) === 'function');
-			});
-		},
-		// - core.isString([arguments, ...])
-		// Check to see if one or more object is a string. 
-		// @return {Boolean}
-		// - 
-		isString: function() {
-			return walk(arguments, function(object) {
-				return (this.getType(object) === 'string');
-			});
-		},
-		// - core.isNumeric([arguments, ...])
-		// Check to see if one or more object is a number. 
-		// @return {Boolean}
-		// - 
-		isNumeric: function() {
-			return walk(arguments, function(object) {
-				return (this.getType(object) === 'number');
-			});
-		},
-		// - core.isPlainObject([arguments, ...])
-		// Check to see if one or more object is a plain object (created using "{}" or "new Object").
-		// @return {Boolean}
-		// - 
-		isPlainObject: function() {
-			return walk(arguments, function(object) {
-				if (!this.isDefined(object) || (object.constructor && !hasOwn.call(object.constructor.prototype, 'isPrototypeOf'))) {
-					return false;
+
+	// Search DOMElement by CSS Selector
+	function process(selector, context, results) {
+		var JetObj = new JetObject();
+		results = results || new JetObject();
+		context = (context && context.nodeType && context.querySelectorAll) ? context : doc;
+		if (results.constructor === JetObject) {
+			// If the passed result is a JetObject, define it as current DOM element list
+			JetObj = results;
+		} else if (fn.isIterator(results)) {
+			// If the passed result is an iterator object, extract it
+			fn.each(results, function() {
+				if (fn.isDOMElement(this)) {
+					JetObj.push(this);
 				}
-				return true;
 			});
-		},
-		// - core.isDocument([arguments, ...])
-		// Check to see if one or more object is a document node.
-		// @return {Boolean}
-		// - 
-		isDocument: function() {
-			return walk(arguments, function(object) {
-				return (this.isDefined(object) && object.nodeType === 9);
-			});
-		},
-		// - core.isEmpty([arguments, ...])
-		// Check to see if one or more object or array is empty.
-		// @param {Object} obj The object that will be checked to see if it's empty.
-		// @return {Boolean}
-		// - 
-		isEmpty: function() {
-			return walk(arguments, function(object) {
-				if (object === null || !core.isDefined(object) || object.length === 0) return true;
-				if (object.length > 0) return false;
-				for (var key in object) {
-					if (hasOwn.call(object, key)) return false;
-				}
-				return true;
-			});
-		},
-		// - core.isWindow([arguments, ...])
-		// Check to see if one or more object is a window object.
-		// @return {Boolean}
-		// @added 1.0.2-Beta
-		// - 
-		isWindow: function() {
-			return walk(arguments, function(object) {
-				return this.isDefined(object, object.setInterval) && this.isFunction(object.setInterval);
-			});
-		},
-		// - core.hasClass(element, list)
-		// Check the element has included one or more classes.
-		// @param {DOMElement} element The element to check the class.
-		// @param {Array} list A list of class.
-		// @return {Boolean}
-		// - 
-		hasClass: function(element, list) {
-			var elemClass, index = 0,
-				className;
-			if (!this.isElement(element)) return false;
-			if (this.isString(list)) {
-				list = [list];
-			} else if (list.length == 0) {
-				return true;
-			}
-			className = ' ' + element.className + ' ';
-			while (elemClass = list[index++]) {
-				if (className.indexOf(' ' + elemClass + ' ') === -1) {
-					return false;
-				}
-			}
-			return true;
-		},
-		// - core.comparePosition(a, b)
-		// Convert the string into jet object.
-		// @param {DOMElement} a The dom element that for compare.
-		// @param {DOMElement} b The dom element that will be compared with first dom element provided.
-		// @return {Number}
-		// - 
-		comparePosition: function(a, b) {
-			return a.compareDocumentPosition ? a.compareDocumentPosition(b) : a.contains ? (a != b && a.contains(b) && 16) + (a != b && b.contains(a) && 8) + (a.sourceIndex >= 0 && b.sourceIndex >= 0 ? (a.sourceIndex < b.sourceIndex && 4) + (a.sourceIndex > b.sourceIndex && 2) : 1) : 0;
-		},
-		// - core.nodeName(element, compare)
-		// Get or compare the element node name
-		// @param {DOMElement} element The dom element to get.
-		// @param {String} compare Compare with the node name
-		// @return {Boolean}
-		// @added 1.1.0
-		// - 
-		nodeName: function(element, compare) {
-			if (core.isDefined(compare)) {
-				return element.nodeName && element.nodeName.toLowerCase() === compare.toLowerCase();
-			}
-			return (element.nodeName) ? element.nodeName.toLowerCase() : '';
-		},
-		// - core.capitalise(text)
-		// Capital the first letter of a string.
-		// @param {String} text The string for capital the first letter.
-		// @return {String}
-		// - 
-		capitalise: function(text) {
-			if (core.isString(text)) {
-				return text.charAt(0).toUpperCase() + text.slice(1);
-			}
-			return '';
-		},
-		// - core.camelCase(text)
-		// Convert from Underscore text or Hyphen text to Camel Case one.
-		// @param {String} text The string that will be converted from Underscore text or Hyphen text to Camel Case one.
-		// @return {String}
-		// - 
-		camelCase: function(text) {
-			return (text) ? text.replace(/[\-_]([\da-z])/gi, function(str, match) {
-				return match.toUpperCase();
-			}) : '';
-		},
-		// - core.inArray(items, compare)
-		// Check to see if an object is included in a specified array.
-		// @param {Object} items The object that will be checked to see if it's included in a specified array.
-		// @param {Object} compare The object for compare.
-		// @return {Boolean}
-		// - 
-		inArray: function(items, compare) {
-			var index = 0,
-				val;
-			if (core.isCollection(items)) {
-				while (val = items[index++]) {
-					if (compare === val) {
-						return true;
+		} else if (fn.isDOMElement(results)) {
+			// If the passed result is a DOM element, add to current DOM element list
+			JetObj.push(results);
+		}
+
+		if (fn.isString(selector) && selector) {
+			selector = selector.trim();
+			if (/^<.+>$/.test(selector)) {
+				fn.each(fn.build(selector), function() {
+					JetObj.push(this);
+				});
+			} else {
+				// If selector is a string, search target elements by css selector
+				fn.each(context.querySelectorAll(selector), function() {
+					if (!this._added) {
+						// Mark the found DOM element as added to avoid duplicated
+						this._added = true;
+						JetObj.push(this);
 					}
+				});
+			}
+		} else if (fn.isDOMElement(selector) || fn.isWindow(selector) || fn.isDocument(selector)) {
+			// If the selector is a DOM element, add to current DOM element list
+			if (!selector._added) {
+				selector._added = true;
+				JetObj.push(selector);
+			}
+		} else if (typeof selector === 'object' && selector !== null) {
+			// If the selector is an iterator object, extract it
+			fn.each(selector, function() {
+				JetObj = process(this, context, JetObj);
+			});
+		} else if (fn.isCallable(selector)) {
+			// If the selector is a callback, put it into DOMReady Pool
+			fn.ready(selector);
+		}
+		return JetObj;
+	}
+
+	Jet = function(selector, context, results) {
+		var JetObj = process(selector, context, results);
+		// Remove all added marker
+		fn.each(JetObj, function() {
+			delete this._added;
+		});
+		return JetObj;
+	};
+
+	/** @namespace Jet */
+	fn = {
+		constructor: Jet,
+
+		/**
+		 * Get the excetly object type
+		 *
+		 * @param      {*}       object  An object you need to identify the
+		 *                               object type.
+		 * @return     {String}  The type name.
+		 */
+		getType: function(object) {
+			var dataType = toString.call(object);
+			dataType = dataType.substr(1, dataType.length - 2);
+			return dataType.split(' ')[1];
+		},
+		/**
+		 * Check the object's type
+		 *
+		 * @param      {*}        object    An object you need to identify for.
+		 * @param      {String}   datatype  A string for identitfy.
+		 * @return     {Boolean}  True if type, False otherwise.
+		 */
+		isType: function(object, datatype) {
+			return this.getType(object).toLowerCase() == datatype.toLowerCase();
+		},
+		/**
+		 * Check to see if an object is an object
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's an object
+		 * @return     {Boolean}  True if object, False otherwise.
+		 */
+		isObject: function(object) {
+			return typeof object == 'object';
+		},
+		/**
+		 * Check to see if an object is a plain object (created using “{}” or
+		 * “new Object”).
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a plaing object
+		 * @return     {Boolean}  True if plain object, False otherwise.
+		 */
+		isPlainObject: function(object) {
+			if (typeof object == 'object' && object !== null) {
+				if (typeof Object.getPrototypeOf == 'function') {
+					var proto = Object.getPrototypeOf(object);
+					return proto === Object.prototype || proto === null;
 				}
+				return toString.call(object) == '[object Object]';
 			}
 			return false;
 		},
-		// - core.defaultStyle(tagname)
-		// Check to see if an object is included in a specified array.
-		// @param {String} tagname The tag name of element.
-		// @return {Boolean}
-		// - 
-		defaultStyle: function(tagname) {
-			var style = defaultStyles[tagname],
-				elem, container = doc;
-			if (!style) {
-				iframe = (iframe || jet('<iframe frameborder="0" width="0" height="0" />')).appendTo(container.documentElement);
-				container = iframe[0].contentDocument;
-				container.write();
-				container.close();
-				elem = jet(container.createElement(tagName)).appendTo(container.body);
-				style = defaultStyles[tagname] = {
-					display: elem.css('display'),
-					overflow: elem.css('overflow')
-				};
-				elem.detach();
-				iframe.detach();
-			}
-			return style;
+		isArray: function(object) {
+			return (object && Array.isArray(object));
 		},
-		// - core.owner(element)
-		// Get the element's owner, return document and window
-		// @param {DOMElement} element The DOM element to get.
-		// @return {PlainObject}
-		// - 
+		/**
+		 * Check to see if an object is a DOM element
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a DOM Element
+		 * @return     {Boolean}  True if dom element, False otherwise.
+		 */
+		isDOMElement: function(object) {
+			return object && (object.nodeType == 1 || object.nodeType == 9 || object.nodeType == 11);
+		},
+		/**
+		 * Check to see if an object is a valid number. NaN and infinite is not
+		 * a valid number
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a number
+		 * @return     {Boolean}  True if number, False otherwise.
+		 */
+		isNumber: function(object) {
+			return (typeof object == 'number' && isFinite(object));
+		},
+		/**
+		 * Check to see if an object is a string
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a string
+		 * @return     {Boolean}  True if string, False otherwise.
+		 */
+		isString: function(object) {
+			return (typeof object == 'string');
+		},
+		/**
+		 * Check to see if an object is a boolean
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a boolean
+		 * @return     {Boolean}  True if boolean, False otherwise.
+		 */
+		isBoolean: function(object) {
+			return (typeof object == 'boolean');
+		},
+		/**
+		 * Check the element is callable function or not
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a callable function
+		 * @return     {Boolean}  True if callable, False otherwise.
+		 */
+		isCallable: function(object) {
+			return (typeof object == 'function');
+		},
+		/**
+		 * Check to see if an object is a native function
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a native function
+		 * @return     {Boolean}  True if native, False otherwise.
+		 */
+		isNative: function(object) {
+			var type = typeof object;
+			return type == 'function' ? regexNative.test(fnToString.call(object)) : (object && type == 'object' && regexConstructor.test(toString.call(object))) || false;
+		},
+		/**
+		 * Check to see if an object is iterable
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a iterable object.
+		 * @return     {Boolean}  True if iterator, False otherwise.
+		 */
+		isIterator: function(object) {
+			return (object && (fn.isNative(object.some) || fn.isNative(object.forEach)));
+		},
+		/**
+		 * Check to see if an object is defined
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's defined
+		 * @return     {Boolean}  True if defined, False otherwise.
+		 */
+		isDefined: function(object) {
+			return (typeof object != 'undefined');
+		},
+		/**
+		 * Check to see if an object is a Document
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a document element
+		 * @return     {Boolean}  True if document, False otherwise.
+		 */
+		isDocument: function(object) {
+			return (object && object.nodeType && object.nodeType === 9);
+		},
+		/**
+		 * Check to see if an object is a Window
+		 *
+		 * @param      {*}        object  The object that will be checked to see
+		 *                                if it's a window element
+		 * @return     {Boolean}  True if window, False otherwise.
+		 */
+		isWindow: function(object) {
+			return object && object.document && object.location && object.alert && object.setInterval;
+		},
+		/**
+		 * Executes a provided function once per iterator element or plain
+		 * object element.
+		 *
+		 * @param      {*}         object    The iterator object you need to
+		 *                                   walk through
+		 * @param      {Function}  callback  The function to execute for each
+		 *                                   element
+		 */
+		each: function(object, callback) {
+			if (fn.isNative(object.some)) {
+				object.some(function(element, index, object) {
+					var result = callback.call(element, index, element, object);
+					return (!fn.isDefined(result)) ? false : !result;
+				});
+			} else if (fn.isNative(object.forEach)) {
+				var skip = false;
+				object.forEach(function(element, index, object) {
+					if (!skip) {
+						var result = callback.call(element, index, element, object);
+						if (fn.isDefined(result) && !result) {
+							skip = true;
+						}
+					}
+				});
+			} else if (fn.isNative(object.item)) {
+				fn.each(slice.call(object), callback);
+			} else if (this.isObject(object)) {
+				for (var index in object) {
+					var result = callback.call(object[index], index, object[index], object);
+					if (fn.isDefined(result) && !result) {
+						break;
+					}
+				}
+			}
+		},
+		/**
+		 * Convert a string to camel case. Space, Hyphen or Underscore will be removed and convert the next character to upper case
+		 *
+		 * @param      {String}   text    A text to convert camel case
+		 * @return     {Boolean}  { description_of_the_return_value }
+		 */
+		camelCase: function(text) {
+			return (text) ? text.toLowerCase().replace(/[\-_\s]([\da-z])/gi, function(str, match) {
+				return match.toUpperCase();
+			}) : '';
+		},
+		/**
+		 * Find the element's document and window
+		 *
+		 * @param      {*}   element  A DOMElement to obtain their owner
+		 * @return     {*}   document & window
+		 */
 		owner: function(element) {
 			var ownerDoc = element.ownerDocument || doc;
 			return {
 				document: ownerDoc,
 				window: ownerDoc.defaultView || ownerDoc.parentWindow
 			};
-		}
-	};
-
-	each('isChrome isSafari isOpera isFirefox isIE getType isDefined isWalkable isJetObject isCollection isElement isArray isObject isFunction isString isNumeric isPlainObject isDocument isEmpty isWindow'.split(' '), function() {
-		jet[this] = core[this];
-	});
-
-	// - jet.each(obj, callback)
-	// Seamlessly iterate each item of an array, array-like or object.
-	// @param {Object} obj The object that will be checked to see if it's included in a specified array.
-	// @param {Function} callback The callback function that to be executed for each item.
-	// @return {jet}
-	// - 
-
-	function each(objects, callback) {
-		var index, length;
-		if (core.isFunction(callback)) {
-			if (core.isCollection(objects)) {
-				for (index = 0, length = objects.length; index < length; index++) {
-					callback.call(objects[index], index, objects[index]);
-				}
-			} else if (core.isObject(objects)) {
-				for (index in objects) {
-					if (objects.hasOwnProperty(index)) {
-						callback.call(objects[index], index, objects[index]);
-					}
-				}
-			} else {
-				callback.call(objects, 0, objects);
-			}
-		}
-		return this;
-	}
-	jet.each = each;
-	// - core.registerCSSHook(name, callback)
-	// Register a Hook for jet.css()
-	// @param {String} name The name of style property that will be executed by user-defined callback function.
-	// @param {Function} callback The callback function thet will be executed.
-	// @return {jet}
-	// - 
-	// - core.registerValueHook(name, callback)
-	// Register a Hook for jet.value()
-	// @param {String} name The name of object type or name that will be executed by user-defined callback function.
-	// @param {Function} callback The callback function thet will be executed.
-	// @return {jet}
-	// - 
-	// - core.registerPropHook(name, callback)
-	// Register a Hook for jet.prop()
-	// @param {String} name The name of property that will be executed by user-defined callback function.
-	// @param {Function} callback The callback function thet will be executed.
-	// @return {jet}
-	// - 
-	// - core.registerUnitHook(name, obj)
-	// Register a Hook for jUnit calculation
-	// @param {String} name The name of property that will be executed by user-defined callback function.
-	// @param {PlainObject} obj A set of callback function.
-	// @item obj:{Function} parseDiff(value) The callback function that for calculate the different between original and specified value.
-	// @param {String} obj.parseDiff.value A specified value that to calculate the difference with original value.
-	// @item obj:{Function} Take(percentage) Returns the original value plus the difference in percentage provided.
-	// @param {Number} obj.take.percentage A number of percentage, between 0 to 1 (0% to 100%).
-	// @item obj:{Function} init(value) The callback function that for setup and calculate the original value.
-	// @param {String} obj.init.value A string of the original value.
-	// @return {jet}
-	// - 
-	each({
-		registerCSSHook: 'css',
-		registerValueHook: 'value',
-		registerPropHook: 'prop',
-		registerUnitHook: 'unit'
-	}, function(method, map) {
-		(function(m) {
-			core[method] = function(name, callback) {
-				if (core.isString(name) && trim(name)) {
-					if ((m === 'unit' && core.isPlainObject(callback)) || core.isFunction(callback)) {
-						jHooks[m][name] = callback;
-					}
-				}
-				return this;
-			};
-		})(map);
-	});
-	// Object clone function
-
-	function clone(object) {
-		var newObject, index, length;
-		if (!core.isDefined(object) || !object) return object;
-		if (object instanceof Date) {
-			
-		} else if (core.isDefined(object.cloneNode)) {
-			return object.cloneNode(true);
-		} else if (core.isObject(object) || core.isJetObject(object)) {
-			newObject = {};
-			for (index in object) {
-				newObject[index] = clone(object[index]);
-			}
-			return newObject;
-		} else if (core.isArray(object)) {
-			newObject = [];
-			for (index = 0, length = object.length; index < length; index++) {
-				newObject.push(clone(object[index]));
-			}
-			return newObject;
-		}
-		return object;
-	}
-	// Extend global function from core to jet
-
-	function extend(objA, objB, inherit) {
-		var name = '';
-		if (core.isObject(objB)) {
-			for (name in objB) {
-				if (!inherit || !core.isDefined(objA[name])) {
-					objA[name] = clone(objB[name]);
-				}
-			}
-		}
-		return objA;
-	}
-	// Bind the original extend function to core for internal or plugin use
-	core.extend = extend;
-	// Bind the original clone function to jet
-	// - jet.clone(obj)
-	// Clone an object.
-	// @param {Object} obj The object that will be cloned.
-	// @return {Object}
-	// @added 1.0.4-Beta
-	// - 
-	jet.clone = clone;
-	// Bind jet extend function
-	// - jet.extend(obj)
-	// Merge the contents of the object into jet control prototype.
-	// @param {Object} obj The object that will be merged into jet control.
-	// @return {jet}
-	// - 
-	jet.extend = function(objects) {
-		var name = '';
-		if (core.isObject(objects)) {
-			for (name in objects) {
-				if (!core.isDefined(this[name])) {
-					this[name] = clone(objects[name]);
-				}
-			}
-		}
-		return this;
-	};
-	// Bind trim function
-	// - jet.trim(text)
-	// Strip whitespace from the beginning and end of a string
-	// @param {String} text The string that for whitespace stripping.
-	// @return {String}
-	// - 
-	// - trim(text)
-	// Strip whitespace from the beginning and end of a string
-	// @param {String} text The string that for whitespace stripping.
-	// @return {String}
-	// - 
-
-	function trim(text) {
-		return (!core.isString(text)) ? '' : text.replace(/(^\s*)|(\s*$)/g, '');
-	}
-	jet.trim = trim;
-
-	// Walk all object
-	function walk(objects, callback) {
-		var index = 0,
-			length = objects.length;
-		if (core.getType(callback) === 'function') {
-			for (; index < length; index++) {
-				if (!callback.call(core, objects[index])) {
-					return false;
-				}
-			}
-		}
-		return true;
-	}
-
-	// Unique Element
-	function unique(objects, collection) {
-		var index = 0,
-			elem, returns = collection || [];
-		while (elem = objects[index++]) {
-			if (!elem.added) {
-				returns.push(elem);
-				elem.added = true;
-			}
-		}
-		index = 0;
-		reset(returns);
-		return returns;
-	}
-
-	// Sibling Element
-	function siblingElement(object, type) {
-		var direction = type + 'Sibling',
-			elementDirection = type + 'ElementSibling';
-		if (!object) return null;
-		if (object[elementDirection]) {
-			return object[elementDirection];
-		} else if (object[direction]) {
-			while (object = object[direction]) {
-				if (core.isElement(object)) {
-					return object;
-				}
-			}
-		}
-		return null;
-	}
-	// Child at First or Last
-
-	function childElement(object, type) {
-		var direction = (type === 'first') ? 'next' : 'previous',
-			child;
-		if (!object) return null;
-		if (object[type + 'ElementChild']) {
-			return object[type + 'ElementChild'];
-		} else {
-			child = object[type + 'Child'];
-			if (core.isElement(child)) return child;
-			return siblingElement(child, direction);
-		}
-	}
-	// Validate Element is passed by selector setting
-
-	function matchElement(element, selectorSetting) {
-		if (selectorSetting.type === '#') {
-			if (element.id !== selectorSetting.tag) {
-				return false;
-			}
-		} else if (selectorSetting.classes.length > 0) {
-			if (!core.hasClass(element, selectorSetting.classes)) {
-				return false;
-			}
-		} else {
-			if (!core.nodeName(element, selectorSetting.tag)) {
-				return false;
-			}
-		}
-		return true;
-	}
-	// Fix selector name or attribute start with numberic
-
-	function selectorSpecialChar(selector) {
-		selector = selector.replace(/#(\d)/, '#\\3$1 ');
-		selector = selector.replace(/(\[\w+\s*=\s*)(\d)/i, '$1\\3$2 ');
-		return selector.replace(/#(\d)/, '#\\3$1 ');
-	}
-	// Clear all added attribute
-
-	function reset(elements) {
-		each(elements, function() {
-			this.added = null;
-		});
-	}
-	// CSS Selector
-
-	function querySelector(selector, context, collection) {
-		var attributeCache = [],
-			selectorSetting, blocks, matches, elements = [doc],
-			elem, elemGroup = [],
-			sibling = '',
-			// Index and Length
-			index, eIndex, length, eLength,
-			// Attribute Varible
-			attribute, attr, validPass = true,
-			// Pseudo Varible
-			pseudoSetting, movementSetting, pseudo, prevList = [],
-			nodeName, movement, movementSetting = {},
-			nth, position = 0,
-			next = 0,
-			results;
-		// Get context set
-		if (core.isDefined(context)) {
-			elements = (core.isCollection(context)) ? context : [context];
-		} else {
-			elements = [doc];
-		}
-		selector = selectorSpecialChar(selector);
-		try {
-			if (trim(selector) === 'body') {
-				elemGroup.push(doc.body);
-			} else {
-				if (elements.length > 0) {
-					for (index = 0, length = elements.length; index < length; index++) {
-						elem = elements[index].querySelectorAll(selector);
-						if (elem.length > 0) {
-							elemGroup = elemGroup.concat(slice.call(elem));
-						}
-					}
-				} else {
-					elements = doc.querySelectorAll(selector);
-					if (elements.length > 0) {
-						elemGroup = elemGroup.concat(slice.call(elements));
-					}
-				}
-			}
-		} catch (error) {
-			while ((blocks = regex.selector.exec(selector)) !== null) { /* START: Define selector type, attribute selector, pseudo and sibling */
-				selectorSetting = {
-					type: (blocks[2] !== '.') ? blocks[2] : '',
-					tag: (blocks[2] === '.') ? '*' : blocks[3],
-					classes: (blocks[2] === '.') ? [blocks[3]] : [],
-					attribute: [],
-					pseudo: []
-				};
-				tmpElements = elements;
-				elements = [];
-				while ((matches = regex.subAttr.exec(blocks[4])) !== null) {
-					if (matches[1] === '.') {
-						selectorSetting.classes.push(matches[2]);
-					} else {
-						selectorSetting.attribute.push('[id=' + matches[2] + ']');
-					}
-				}
-				while ((matches = regex.attribute.exec(blocks[5])) !== null) {
-					selectorSetting.attribute.push(matches[0]);
-				}
-				while ((matches = regex.pseudo.exec(blocks[5])) !== null) {
-					selectorSetting.pseudo.push(matches[0]);
-				}
-				selectorSetting.tag = selectorSetting.tag.replace(/(\.|#).*/, ''); /* END: Define selector type, attribute selector, pseudo and sibling */
-				for (index = 0, length = tmpElements.length; index < length; index++) {
-					// Sibling Selector
-					if (sibling) {
-						if (sibling === '~') {
-							elem = tmpElements[index];
-							while ((elem = siblingElement(elem, 'next'))) {
-								if (elem.walked) break;
-								if (matchElement(elem, selectorSetting)) {
-									elements.push(elem);
-									elem.walked = true;
-								}
-							}
-						} else if (sibling === '+') {
-							elem = tmpElements[index];
-							while ((elem = siblingElement(elem, 'next'))) {
-								if (elem.walked) break;
-								if (matchElement(elem, selectorSetting)) {
-									elements.push(elem);
-									elem.walked = true;
-								}
-								break;
-							}
-						} else if (sibling === '>') {
-							elem = childElement(tmpElements[index], 'first');
-							do {
-								if (!elem || elem.walked) break;
-								if (matchElement(elem, selectorSetting)) {
-									elements.push(elem);
-									elem.walked = true;
-								}
-							} while (elem && (elem = siblingElement(elem, 'next')));
-						}
-					} else {
-						// Normal Element Finder
-						if (selectorSetting.type == '#') {
-							elem = doc.getElementById(selectorSetting.tag);
-							if (elem && (tmpElements[index] === doc || core.comparePosition(tmpElements[index], elem) === 20)) {
-								if (core.hasClass(elem, selectorSetting.classes)) {
-									elements.push(elem);
-								}
-							}
-						} else {
-							if (selectorSetting.type == '.') {
-								if (doc.getElementsByClassName) {
-									elem = tmpElements[index].getElementsByClassName(selectorSetting.tag);
-								}
-							} else {
-								if (selectorSetting.tag == 'body') {
-									if (tmpElements[index] == doc) {
-										elem = [doc.body];
-									} else {
-										elements = [];
-										break;
-									}
-								} else {
-									elem = tmpElements[index].getElementsByTagName(selectorSetting.tag);
-								}
-							}
-							for (eIndex = 0, eLength = elem.length; eIndex < eLength; eIndex++) {
-								if (core.hasClass(elem[eIndex], selectorSetting.classes)) {
-									elements.push(elem[eIndex]);
-								}
-							}
-						}
-					}
-				}
-				index = 0;
-				while (elem = elements[index++]) {
-					elem.walked = false;
-				}
-				// Pseudo Selector
-				if (selectorSetting.pseudo.length > 0) {
-					index = 0;
-					while ((pseudo = selectorSetting.pseudo[index++])) {
-						tmpElements = elements;
-						elements = [];
-						matches = regex.pseudo.exec(pseudo);
-						pseudoSetting = {
-							type: matches[1],
-							value: matches[3]
-						};
-						eIndex = 0;
-						if (pseudoSetting.type === 'contains') {
-							while ((elem = tmpElements[eIndex++])) {
-								if ((elem.innerText || elem.textContent || '').indexOf(pseudoSetting.value) > -1) {
-									elements.push(elem);
-								}
-							}
-						} else if (pseudoSetting.type === 'only-child') {
-							while ((elem = tmpElements[eIndex++])) {
-								if (!siblingElement(elem, 'next') && !siblingElement(elem, 'previous')) {
-									elements.push(elem);
-								}
-							}
-						} else if (pseudoSetting.type === 'first-child') {
-							while ((elem = tmpElements[eIndex++])) {
-								if (childElement(elem.parentNode, 'first') === elem) {
-									elements.push(elem);
-								}
-							}
-						} else if (pseudoSetting.type === 'last-child') {
-							while ((elem = tmpElements[eIndex++])) {
-								if (childElement(elem.parentNode, 'last') === elem) {
-									elements.push(elem);
-								}
-							}
-						} else if (pseudoSetting.type === 'not') {
-							while ((elem = tmpElements[eIndex++])) {
-								if (pseudoSetting.value.substring(0, 1) === '.') {
-									if (!core.hasClass(elem, [pseudoSetting.value.substring(1)])) {
-										elements.push(elem);
-									}
-								} else if (pseudoSetting.value.substring(0, 1) === '#') {
-									if (elem.id !== pseudoSetting.value.substring(1)) {
-										elements.push(elem);
-									}
-								} else {
-									if (core.nodeName(elem, pseudoSetting.value)) {
-										elements.push(elem);
-									}
-								}
-							}
-						} else if (pseudoSetting.type.substring(0, 3) === 'nth') {
-							if (pseudoSetting.value) pseudoSetting.value = pseudoSetting.value.replace(/^2n\+1$/, 'odd').replace(/^2n$/, 'even');
-							nth = regex.nth.exec(pseudo);
-							movement = (nth[2] === 'last') ? ['last', 'previous'] : ['first', 'next'];
-							movementSetting = {
-								start: 0,
-								step: 1,
-								limit: -1
-							};
-							if (pseudoSetting.value === 'n') {
-								elements = tmpElements;
-								continue;
-							} else if (pseudoSetting.value === 'even') {
-								movementSetting.start = 1;
-								movementSetting.step = 2;
-							} else if (pseudoSetting.value === 'odd') {
-								movementSetting.start = 0;
-								movementSetting.step = 2;
-							} else {
-								matches = pseudoSetting.value.match(regex.nthValue);
-								if (!matches[3]) {
-									movementSetting.start = movementSetting.limit = parseInt(matches[2]) - 1;
-								} else {
-									movementSetting.step = (matches[4]) ? parseInt(matches[4]) : 1;
-									if (!matches[5]) {
-										movementSetting.start = movementSetting.step - 1;
-									} else {
-										if (matches[1] === '-') {
-											movementSetting.limit = (matches[8]) ? parseInt(matches[8]) - 1 : 0;
-											movementSetting.start = movementSetting.limit % movementSetting.step;
-										} else {
-											movementSetting.start = (matches[8]) ? parseInt(matches[8]) - 1 : 0;
-										}
-									}
-								}
-							}
-							while ((elem = tmpElements[eIndex++])) {
-								prevEle = elem.parentNode;
-								prevEle.childExists = prevEle.childExists || {};
-								nodeName = elem.nodeName;
-								if (!prevEle.childExists[nodeName]) {
-									elem = childElement(prevEle, movement[0]);
-									next = movementSetting.start;
-									while (elem && (movementSetting.limit === -1 || position <= movementSetting.limit)) {
-										if (!(nth[3] === 'of-type') || (elem.nodeName === nodeName)) {
-											if (position === next) {
-												if (elem.nodeName === nodeName) {
-													elements[elements.length] = elem;
-												}
-												next += movementSetting.step;
-											}
-											position++;
-										}
-										elem = siblingElement(elem, movement[1]);
-									}
-									prevEle.childExists[nodeName] = true;
-									prevList[prevList.length] = prevEle;
-									position = 0;
-								}
-							}
-							eIndex = 0;
-							while ((elem = prevList[eIndex++])) {
-								elem.childExists = {};
-							}
-						}
-					}
-				}
-				// Attribute Selector
-				if (selectorSetting.attribute.length > 0) {
-					tmpElements = elements;
-					elements = [];
-					for (index = 0, length = tmpElements.length; index < length; index++) {
-						eIndex = 0;
-						validPass = true;
-						while ((attr = selectorSetting.attribute[eIndex++])) {
-							if (attributeCache[attr]) {
-								matches = attributeCache[attr];
-							} else {
-								matches = regex.attribute.exec(attr);
-								attributeCache[attr] = matches;
-							}
-							attribute = matches[6] || matches[8] || matches[9];
-							value = tmpElements[index][attrmap[matches[1]] || matches[1]];
-							if (!attribute && !value) {
-								validPass = false;
-								break;
-							} else {
-								if (matches[3]) {
-									attrOperator = {
-										'^': '^' + attribute,
-										'$': attribute + '$',
-										'*': attribute,
-										'|': '^' + attribute + '(\\-\\w+)*$',
-										'~': '\\b' + attribute + '\\b'
-									};
-									if (!(new RegExp(attrOperator[matches[3]])).test(value)) {
-										validPass = false;
-										break;
-									}
-								} else {
-									if (value !== attribute) {
-										validPass = false;
-										break;
-									}
-								}
-							}
-						}
-						if (validPass) {
-							elements.push(tmpElements[index]);
-						}
-					}
-				}
-				sibling = (trim(blocks[7]) !== ',') ? trim(blocks[7]) : '';
-				if (blocks[7].indexOf(',') !== -1) {
-					elemGroup = elemGroup.concat(elements);
-					elements = [doc];
-				}
-			}
-			if (elements.length > 0) {
-				elemGroup = elemGroup.concat(elements);
-			}
-		}
-		
-		results = unique(elemGroup, collection, selector);
-		results.selector = selector;
-		return results;
-	}
-	// Setup the jetObject as a prototype object
-	// jet function
-	jet.extend({
-		version: '1.1.0',
-		// - jet.noConflict()
-		// Release the jet control of the jet variable.
-		// @return {jet}
-		// - 
-		noConflict: function() {
-			var _jet = win.jet;
-			win.jet = null;
-			return _jet;
 		},
-		// - jet.ready(callback)
-		// Add the callback function to queue and execute when the DOM is fully loaded. Equivalent as jet(callback).
-		// @param {Function} callback The object that is a set of plugin to install.
-		// @return {jet}
-		// - 
-		ready: function(callback) {
-			var index, func;
-			if (core.isArray(callback)) {
-				index = 0;
-				while (func = callback[index++]) {
-					this.ready(func);
-				}
-			} else {
-				if (core.isFunction(callback)) {
-					onLoadEvent.push(callback);
-				}
+		/**
+		 * Get the current selected text
+		 *
+		 * @return     {String}
+		 */
+		getSelection: function() {
+			var activeEl = doc.activeElement,
+				activeElTagName = (activeEl) ? activeEl.tagName.toLowerCase() : null;
+
+			if (/(?:textarea|input)/.test(activeElTagName) && /^(?:text|search|password|tel|url)$/i.test(activeEl.type) && (fn.isNumber(activeEl.selectionStart))) {
+				return activeEl.value.slice(activeEl.selectionStart, activeEl.selectionEnd);
+			} else if (window.getSelection) {
+				return window.getSelection().toString();
 			}
-			return this;
-		}
-	});
-	jet.extend({
-		// - jet.shift(html)
-		// Convert the string into jet object.
-		// @param {String} html The string that will be converted to a set of elements.
-		// @return {jetObject}
-		// - 
-		shift: function(html) {
-			var object = new jetObject();
+			return '';
+		},
+		/**
+		 * Create a deep copy of the object
+		 *
+		 * @param      {*}   object  The object you need to clone for.
+		 * @return     {*}   Copy of this object.
+		 */
+		clone: function(object) {
+			var newObject;
+			if (!fn.isDefined(object) || !object) return object;
+			if (object instanceof Date) {
+				return new Date(object.getTime());
+			} else if (fn.isDefined(object.cloneNode)) {
+				return object.cloneNode(true);
+			} else if (fn.isArray(object)) {
+				return slice.call(object);
+			} else if (fn.isObject(object)) {
+				if (object.constructor) {
+					newObject = object.constructor();
+				} else {
+					newObject = {};
+				}
+				fn.each(object, function(key, val) {
+					newObject[key] = fn.clone(val);
+				});
+				return newObject;
+			} else {
+				return object;
+			}
+		},
+		/**
+		 * Make html dom element by string
+		 *
+		 * @param      {String}     html    A HTML string to convert as DOM
+		 *                                  element
+		 * @param      {boolean}    [deep]    If true, all DOM element will be
+		 *                                  added to list, else the top level
+		 *                                  only
+		 * @return     {JetObject}  The Jet Object
+		 */
+		build: function(html, deep) {
+			var object = new JetObject();
 			container.innerHTML = html;
-			each(container.children, function() {
+			fn.each((deep) ? container.querySelectorAll('*') : container.children, function() {
 				object.push(this.cloneNode(true));
 			});
 			container.innerHTML = '';
 			return object;
 		},
-		// - jet.ajax(object)
-		// Perform an Asynchronous JavaScript and XML (Ajax) request and apply the JSON or XML object into specified callback function.
-		// @param {PlainObject} object A set of setting for perform an Ajax request.
-		// @item obj:{String} url The target url for Ajax request.
-		// @item obj:{Number} timeout Setup a timeout option for request. Value in millisecond.
-		// @item obj:{String} method The request method in POST or GET.
-		// @item obj:{PlainObject} headers The plain object with headers that will be set for request.
-		// @item obj:{PlainObject} data The plain object with POST data that will be sent.
-		// @item obj:{String} dataType The string of data type in 'json' or 'xml'
-		// @return {jet}
-		// - 
-		ajax: function(object) {
-			var data = {},
-				parser;
-			object = object || {};
-				if (object.dataType === 'xml') {
-					object.parser = function(response) {
-						var p;
-						try {
-							if (win.DOMParser) {
-								p = new DOMParser();
-								return p.parseFromString(response, 'text/xml');
-							} else {
-								p = new ActiveXObject('Microsoft.XMLDOM');
-								p.async = false;
-								p.loadXML(response);
-								return p;
-							}
-						}
-						catch (error) {
-							return null;
-						}
-					};
-				} else {
-					object.parser = function(response) {
-						var obj = {};
-						if (core.isString(response) && response.length > 0) {
-							try {
-								obj = eval('(' + response + ')');
-							}
-							catch (error) {
-								return null;
-							}
-						}
-						return obj;
-					};
-				}
-			return jet.request(object);
+		/**
+		 * Takes a well-formed JSON string and returns the resulting JavaScript
+		 * value.
+		 *
+		 * @param      {String}  text    The JSON string to parse.
+		 * @return     {object}  { description_of_the_return_value }
+		 */
+		parseJSON: function(text) {
+			if (!text || !fn.isString(text)) {
+				return null;
+			}
+
+			try {
+				return JSON.parse(text);
+			} catch (e) {
+				return null;
+			}
 		},
-		// - jet.request(object)
-		// Perform a web request with get / post method.
-		// @param {PlainObject} object A set of setting for perform an Ajax request.
-		// @item obj:{String} url The target url for Ajax request.
-		// @item obj:{Number} timeout Setup a timeout option for request. Value in millisecond.
-		// @item obj:{String} method The request method in POST or GET.
-		// @item obj:{Function} success The callback function that will be executed when the request is completed.
-		// @item obj:{Function} error The callback function that will be executed if the request returns error or timeout.
-		// @item obj:{PlainObject} headers The plain object with headers that will be set for request.
-		// @item obj:{PlainObject} data The plain object with POST data that will be sent.
-		// @return {jet}
-		// - 
-		request: function(object) {
-			var that = this,
-				d = jet.Deferred();
-			(function(deferred) {
-				var xmlHttp = null,
-					dataString = '',
-					index;
-				if (core.isPlainObject(object) && core.isDefined(object.url) && object.url.length > 0) {
-					// Setup HTTP Request
-					xmlHttp = new XMLHttpRequest();
-					// Setup Timeout
-					if (parseInt(object.timeout) > 0) {
-						xmlHttp.timeoutTimer = setTimeout(function() {
-							xmlHttp.abort('timeout');
-						}, parseInt(object.timeout));
-					}
-					// Bind onReadyStateChange event
-					xmlHttp.onreadystatechange = function() {
-						var response;
-						if (xmlHttp.readyState != 4) return;
-						if (xmlHttp.status == 200) {
-							if (core.isFunction(object.parser)) {
-								response = object.parser.call(deferred, xmlHttp.responseText);
-								if (response === null) {
-									deferred.reject({
-										status: xmlHttp.status,
-										text: 'Fail to parse target object'
-									});
-								} else {
-									deferred.resolve(response);
-								}
-							} else {
-								deferred.resolve(xmlHttp.responseText);
-							}
-						} else {
-							deferred.reject({
-								status: xmlHttp.status,
-								text: xmlHttp.statusText
-							});
-						}
-					};
-					try {
-						// Request method
-						if (object.method === 'post') {
-							xmlHttp.open('POST', object.url, true);
-							// Set Header
-							if (core.isPlainObject(object.headers)) {
-								for (index in object.headers) {
-									xmlHttp.setRequestHeader(index, object.headers[index]);
-								}
-							}
-							// Set Post Data
-							if (core.isDefined(object.data)) {
-								if (object.data.constructor != FormData && core.isPlainObject(object.data)) {
-									xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-									for (index in object.data) {
-										dataString += (dataString.length) ? '&' + index + '=' + object.data[index] : index + '=' + object.data[index];
-									}
-									xmlHttp.send(dataString);
-								} else if (core.isString(object.data)) {
-									xmlHttp.setRequestHeader('Content-type', 'application/x-www-form-urlencoded');
-									xmlHttp.send(object.data);
-								} else {
-									xmlHttp.send(object.data);
-								}
-							}
-						} else {
-							// Method 'Get'
-							xmlHttp.open('GET', object.url, true);
-							xmlHttp.send();
-						}
-					}
-					catch (err) {
-						deferred.reject({
-							status: xmlHttp.status,
-							text: xmlHttp.statusText
-						});
-					}
-				}
-				return deferred.detach();
-			})(d);
-			return d;
+		/**
+		 * Parses a string into an XML document.
+		 *
+		 * @param      {String}  text    a well-formed XML string to be parsed
+		 * @return     {XMLDOM}  { description_of_the_return_value }
+		 */
+		parseXML: function(text) {
+			var parser;
+			if (!text || !fn.isString(text)) {
+				return null;
+			}
+			try {
+				parser = new DOMParser();
+			} catch ( e ) {
+				parser = undefined;
+			}
+			return (!parser || (parser = parser.parseFromString(text, 'text/xml')).getElementsByTagName('parsererror').length) ? null : parser;
 		},
-		// - jet.walk(object, callback)
-		// Execute the user-defined callback function to each item of the array, array-like object, plain object or object.
-		// @param {Object} object The array, array-like object, plain object or object that will be iterated.
-		// @param {Function} callback The callback function thet will be executed.
-		// @return {jet}
-		// - 
+		/**
+		 * Executes a provided function once per iterator element or plain
+		 * object element, collect all result to output as an Array.
+		 *
+		 * @param      {object}    object    The object to iterate over.
+		 * @param      {Function}  callback  The callback
+		 * @return     {Array}     { description_of_the_return_value }
+		 */
 		walk: function(object, callback) {
 			var result = [];
-			if ((core.isArray(object) || core.isPlainObject(object)) && core.isFunction(callback)) {
-				each(object, function(i) {
-					var value = callback.call(this, i, this);
-					if (core.isArray(value)) {
-						result = result.concat(value);
-					} else {
-						result.push(value);
-					}
-				});
-			}
+			fn.each(object, function(key) {
+				var value = callback.call(this, key, this);
+				result.push(value);
+			});
 			return result;
 		},
-		// - jet.buildQueryString(object)
-		// Generates a URL-encoded query string from the array or plain object provided.
-		// @param {Object} object The array or plain object that will be converted to a URL-encoded query. If the object is an array, each item should included 'name' and 'value' properties.
-		// @return {String}
-		// - 
-		buildQueryString: function(object) {
-			var queryString = [],
-				value;
-			if (core.isCollection(object)) {
-				each(object, function() {
-					if (core.isDefined(this.name, this.value)) {
-						value = (core.isFunction(this.value)) ? this.value() : this.value;
-						queryString.push(encodeURIComponent(this.name) + '=' + encodeURIComponent(value));
-					}
-				});
-			} else if (core.isPlainObject(object)) {
-				each(object, function(i, val) {
-					value = (core.isFunction(val)) ? val() : val;
-					queryString.push(encodeURIComponent(i) + '=' + encodeURIComponent(value));
-				});
-			}
-			return (queryString.length > 0) ? queryString.join('&') : '';
+		comparePosition: function(a, b) {
+			return a.compareDocumentPosition ? a.compareDocumentPosition(b) : a.contains ? (a != b && a.contains(b) && 16) + (a != b && b.contains(a) && 8) + (a.sourceIndex >= 0 && b.sourceIndex >= 0 ? (a.sourceIndex < b.sourceIndex && 4) + (a.sourceIndex > b.sourceIndex && 2) : 1) : 0;
 		},
-		
-		// - .json()
-		// Encode a object as a json.
-		// @return {String}
-		// - 
-		json: function(object) {
-			return (function parse(obj){
-				var returns = [];
-				if (core.isObject(obj)) {
-					if (core.isDefined(obj.name, obj.value)) {
-						returns.push('"' + obj.name + '": ' + '"' + ((core.isFunction(obj.value)) ? obj.value() : obj.value) + '"');
+		/**
+		 * Create a serialized representation of an array, a plain object, or a
+		 * JetObject object suitable for use in a URL query string or Ajax
+		 * request.
+		 *
+		 * @param      {object}  data    An array, a plain object, or a
+		 *                               JetObject object to serialize.
+		 * @return     {String}  { description_of_the_return_value }
+		 */
+		param: function(data) {
+			var params = [];
+			function build(key, value) {
+				value = (fn.isCallable(value)) ? value() : value;
+				params.push(encodeURIComponent(key) + '=' + encodeURIComponent(value || ''));
+			}
+			(function run(data, prefix) {
+				fn.each(data, function(key, val) {
+					if (fn.isIterator(val) || fn.isPlainObject(val)) {
+						run(val, (prefix) ? prefix + '[' + ((typeof val == 'object' && val !== null) ? key : '') + ']' : key);
 					} else {
-						each(obj, function(key, value) {
-							returns.push('"' + key + '": ' + parse(value));
-						});
+						build((prefix) ? prefix + '[' + key + ']' : key, val);
 					}
-					return '{' + returns.join(', ') + '}';
-				} else if (core.isCollection(obj)) {
-					each(obj, function(key, value) {
-						returns.push('"' + key + '": ' + parse(value));
-					});
-					return '[' + returns.join(', ') + ']';
-				} else {
-					return '"' + obj.toString() + '"';
-				}
-			})(object);
+				});
+			})(data, '');
+			return params.join('&');
 		},
 
-		// - jet.developer(callback)
-		// Provide developer environment for plugin implementation.
-		// @param {Function} callback The callback function that will be executed for developer environment
-		// @return {jet}
-		// @added 1.0.5-Beta
-		// - 
-		developer: function(callback) {
-			if (core.isFunction(callback)) {
-				callback.call(clone(core));
+		/**
+		 * Parse query string into an object
+		 *
+		 * @param      {String}       query   A query string convert to object
+		 * @return     {PlainObject}  { description_of_the_return_value }
+		 */
+		parseQuery: function(query) {
+			var params = {};
+			if (!query || !fn.isString(query)) {
+				return params;
+			}
+			var pairs = query.split(/[;&]/);
+			fn.each(pairs, function(k) {
+				var keyValuePair = this.split('=');
+				if (keyValuePair) {
+					if (keyValuePair.length == 1) {
+						params[unescape(keyValuePair[0])] = true;
+					} else {
+						params[unescape(keyValuePair[0])] = unescape(keyValuePair[1]).replace(/\+/g, ' ');
+					}
+				}
+			});
+			return params;
+		},
+		/**
+		 * Specify a function to execute when the web page is fully loaded.
+		 *
+		 * @param      {Function}   callback  A function to execute after the
+		 *                                    DOM is ready.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		ready: function(callback) {
+			var self = this;
+			if (fn.isIterator(callback)) {
+				fn.each(callback, function() {
+					self.ready(this);
+				});
+			} else {
+				if (fn.isCallable(callback)) {
+					onLoadEvent.push(callback);
+				}
+			}
+			return this;
+		},
+		/**
+		 * Holds or releases the execution of Jet’s ready event.
+		 *
+		 * @param      {Boolean}    enable  Indicates whether the ready hold is
+		 *                                  being requested or released
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		holdReady: function(enable) {
+			if (enable) {
+				onHold = true;
+			} else {
+				if (onHold) {
+					onHold = false;
+					triggerOnLoad();
+				}
+			}
+			return this;
+		},
+		/**
+		 * Relinquish Jet's control of the Jet variable.
+		 *
+		 * @return	 {Jet}
+		 */
+		noConflict: function() {
+			if (conflict) {
+				global.Jet = conflict;
 			}
 			return this;
 		}
-	});
+	};
+
+	/**
+	 * Contains flags for the useragent, read from navigator.userAgent
+	 * @namespace             Jet
+	 * @property   {Boolean}  browser.chrome   True if broswer is Chrome, False
+	 *                                         otherwise.
+	 * @property   {Boolean}  browser.opera    True if broswer is Opera, False
+	 *                                         otherwise.
+	 * @property   {Boolean}  browser.safari   True if broswer is Safari, False
+	 *                                         otherwise.
+	 * @property   {Boolean}  browser.firefox  True if broswer is FireFox, False
+	 *                                         otherwise.
+	 * @property   {Boolean}  browser.msie     True if broswer is Microsoft
+	 *                                         Internet Explore, False
+	 *                                         otherwise.
+	 * @property   {Boolean}  browser.edge     True if broswer is Microsoft
+	 *                                         Edge, False otherwise.
+	 * @property   {Boolean}  browser.webkit   True if broswer is support webkit
+	 *                                         engine, False otherwise.
+	 * @property   {String}   browser.vendor   Returns broswer vendor
+	 * @property   {String}   browser.prefix   Returns broswer vendor css prefix
+	 * @property   {Double}   browser.version  Returns the broswer engine
+	 *                                         version
+	 */
+	fn.browser = {
+		chrome: !!win.chrome && !!win.chrome.webstore,
+		opera: (!!win.opr && !!win.opr.addons) || !!win.opera || nav.userAgent.indexOf(' OPR/') >= 0,
+		safari: toString.call(win.HTMLElement).indexOf('Constructor') > 0 || (!win.safari || safari.pushNotification).toString() === '[object SafariRemoteNotification]',
+		firefox: nav.userAgent.indexOf(' Firefox/') >= 0,
+		msie: nav.userAgent.indexOf(' MSIE') >= 0,
+		edge: nav.userAgent.indexOf(' Edge/') >= 0,
+	};
+	fn.browser.webkit = 'WebkitAppearance' in docElem.style;
+	fn.browser.vendor = (slice.call(win.getComputedStyle(docElem, '')).join('').match(/-(moz|webkit|ms)-/) || (styles.OLink === '' && ['', 'o']))[1];
+	fn.browser.prefix = '-' + fn.browser.vendor + '-';
+	fn.browser.version = (function() {
+		var ua = nav.userAgent, matches, webkitVersion;
+		if (win.opera){
+			return win.opera.version();
+		} else {
+			if (!!(matches = /AppleWebKit\/(\S+)/.exec(ua))) {
+				webkitVersion = matches[1];
+				if (!!(matches = /(?:Chrome|Version)\/(\S+)/.exec(ua))) {
+					return matches[1];
+				} else {
+					if (fn.browser.safari) {
+						if (webkitVersion < 100){
+							return 1;
+						} else if (webkitVersion < 312){
+							return 1.2;
+						} else if (webkitVersion < 412){
+							return 1.3;
+						} else {
+							return 2;
+						}
+					}
+				}
+			} else if (!!(matches = (/KHTML\/(\S+)/.exec(ua) || /Konqueror\/([^;]+)/.exec(ua)))) {
+				return matches[1];
+			} else if (!!(matches = /rv:([^\)]+)\) Gecko\/\d{8}/.exec(ua))) {
+				return matches[1];
+			} else if (!!(matches = /MSIE ([^;]+)/.exec(ua))) {
+				return matches[1];
+			}
+		}
+		return 0;
+	})();
+
+	/**
+	 * Jet Thread Object provides asynchronous
+	 *
+	 * @class      Thread (name)
+	 * @this       {Thread}
+	 * @param      {...(Function|Thread)}  [callback]  The function to be
+	 *                                               executed
+	 * @return     {Thread}                { description_of_the_return_value }
+	 */
+	fn.Thread = function(callback) {
+		var context,
+			self = this,
+			status = 'pending',
+			queue = [],
+			pool = [],
+			results = [],
+			threadRunning = 0,
+			index = 0,
+			postProcess = {
+				done: null,
+				fail: null,
+				always: null,
+				finally: null
+			},
+			abort = false,
+			pump = function(arg) {
+				if (!abort) {
+					if (queue.length > 0) {
+						var exec = queue.shift();
+						exec(arg);
+					} else {
+						threadEnd();
+					}
+				}
+			},
+			threadEnd = function() {
+				if (queue.length == 0 && !threadRunning) {
+					if (postProcess.finally) {
+						postProcess.finally.apply(results, results);
+					}
+					if (fn.isCallable(promise.finalize)) {
+						promise.finalize(results);
+					}
+					status = 'completed';
+				}
+			},
+			promise = {
+				constructor: fn.Thread,
+				/**
+				 * Add handler to be called when the thread has finished all the
+				 * job. Rejected task will return null as result
+				 * @memberof   Thread
+				 *
+				 * @param      {Function}  callback  The callback function to execute
+				 *                                   when the thread has completed
+				 * @return     {Thread}    { description_of_the_return_value }
+				 */
+				finally: function(callback) {
+					if (fn.isCallable(callback)) {
+						postProcess.finally = callback;
+						threadEnd();
+					}
+					return promise;
+				},
+
+				/**
+				 * Add new callback or Thread to current Thread
+				 * @memberof   Thread
+				 *
+				 * @param      {Function}  callback  The callback function to
+				 *                                   execute, or other Thread to bind
+				 *                                   for
+				 * @return     {Thread}    { description_of_the_return_value }
+				 */
+				add: function(callback) {
+					if (promise.getStatus() !== 'complete') {
+						if (fn.isCallable(callback) || callback.constructor == fn.Thread) {
+							queue.push(ThreadExecution(callback));
+							if (callback.constructor == fn.Thread) {
+								threadRunning++;
+							}
+						}
+					}
+					return promise;
+				},
+
+				/**
+				 * Return the status of thread in 'pending', 'running', 'running (on
+				 * hold)' and 'completed'
+				 * @memberof   Thread
+				 *
+				 * @return     {String}  The status.
+				 */
+				getStatus: function() {
+					return status;
+				}
+			},
+			ThreadExecution = function(execution) {
+				var index = queue.length,
+					closure = function(args) {
+						action.arguments = args;
+						if (execution.constructor == fn.Thread) {
+							execution.finalize = function(threadResult) {
+								results[index] = threadResult;
+								threadRunning--;
+								threadEnd();
+							};
+							if (execution.getStatus() == 'completed') {
+								threadEnd();
+							}
+							pump(args);
+						} else {
+							closure.result = execution.call(action, args);
+							results[index] = closure.result;
+							closure.done = true;
+
+							if (!closure.paused) {
+								pump(args);
+								pool.push(closure);
+								if (postProcess.done) {
+									postProcess.done.call((fn.isDefined(context)) ? context : closure.result, closure.result);
+								}
+								if (postProcess.always) {
+									postProcess.always.call((fn.isDefined(context)) ? context : closure);
+								}
+							}
+						}
+					},
+					action = {
+						arguments: null,
+						/**
+						 * Abort the current thread, the remaining execution will not execute.
+						 * @memberof   ThreadExecution
+						 *
+						 * @return     {ThreadExecution}    { description_of_the_return_value }
+						 */
+						abort: function() {
+							abort = true;
+							status = 'thread aborted';
+							return action;
+						},
+						/**
+						 * Pause thread execution until "resume" has called
+						 * @memberof   ThreadExecution
+						 *
+						 * @return     {ThreadExecution}    { description_of_the_return_value }
+						 */
+						wait: function() {
+							// Pause the task
+							closure.paused = true;
+							status = 'waiting';
+							return action;
+						},
+						/**
+						 * Resume the thread execution and return the resolved result
+						 * @memberof   ThreadExecution
+						 *
+						 * @return     {ThreadExecution}    { description_of_the_return_value }
+						 */
+						resume: function() {
+							// Resume the task, and trigger 'done' and 'always' handler
+							if (closure.paused) {
+								closure.paused = false;
+								status = 'running';
+								// If the task has marked as done, trigger 'done' handler
+								if (closure.done) {
+									if (arguments.length > 0) {
+										closure.result = arguments[0];
+										results[index] = closure.result;
+									}
+									if (postProcess.done) {
+										postProcess.done.call((fn.isDefined(context)) ? context : closure.result, closure.result);
+									}
+									pump(action.arguments);
+								}
+								if (postProcess.always) {
+									postProcess.always.apply((fn.isDefined(context)) ? context : closure);
+								}
+							}
+							return action;
+						},
+						/**
+						 * Reject the thread execution
+						 * @memberof   ThreadExecution
+						 *
+						 * @return     {ThreadExecution}    { description_of_the_return_value }
+						 */
+						reject: function() {
+							// Mark the task as rejected
+							closure.rejected = true;
+							// Trigger 'fail' and 'always' handler
+							if (postProcess.fail) {
+								postProcess.fail.call((fn.isDefined(context)) ? context : closure);
+							}
+							if (postProcess.always) {
+								postProcess.always.call((fn.isDefined(context)) ? context : closure);
+							}
+							return action;
+						}
+					};
+				
+				closure.done = closure.paused = closure.rejected = false;
+				return closure;
+			};
+
+		fn.each('done fail always'.split(' '), function() {
+			var self = this;
+			/**
+			 * Add handlers to be called when the Thread object is resolved.
+			 *
+			 * @memberof   Thread
+			 * @name       done
+			 * @param      {Function}  callback  The callback function to execute
+			 *
+			 * @return     {Thread}    { description_of_the_return_value }
+			 */
+			/**
+			 * Add handlers to be called when the Thread object is rejected.
+			 *
+			 * @memberof   Thread
+			 * @name       fail
+			 * @param      {Function}  callback  The callback function to execute
+			 *
+			 * @return     {Thread}    { description_of_the_return_value }
+			 */
+			/**
+			 * Add handlers to be called when the Thread object is either
+			 * resolved or rejected.
+			 *
+			 * @memberof   Thread
+			 * @name       always
+			 * @param      {Function}  callback  The callback function to execute
+			 *
+			 * @return     {Thread}    { description_of_the_return_value }
+			 */
+			promise[self] = function(callback) {
+				if (fn.isCallable(callback)) {
+					// If always handler was added, exeute it either done or fail
+					if (self == 'always') {
+						fn.each(pool, function() {
+							if (this.done && !this.paused) {
+								callback.apply(this.result);
+							}
+						});
+						postProcess.always = callback;
+					} else {
+						fn.each(pool, function() {
+							// If sealed closure has done and not paused, throw it to handler
+							if (this.done && !this.paused) {
+								// .fail() will be called if the job has rejected
+								// .done() will be called if the job has not rejected
+								if (!this.rejected && self == 'done') {
+									callback.call((fn.isDefined(context)) ? context : this.result, this.result);
+								} else if (this.rejected && self == 'fail') {
+									callback((fn.isDefined(context)) ? context : callback);
+								}
+							}
+						});
+						postProcess[self] = callback;
+					}
+				}
+				return promise;
+			};
+		});
+		fn.each('resolve resolveWith'.split(' '), function() {
+			var self = this;
+			/**
+			 * Resolve a Thread object and call any doneCallbacks with the given
+			 * args.
+			 *
+			 * @memberof   Thread
+			 * @name       resolve
+			 * @param      {...Object}  [args]  Optional arguments that are
+			 *                                  passed to the doneCallbacks.
+			 *
+			 * @return     {Thread}     { description_of_the_return_value }
+			 */
+			/**
+			 * Resolve a Thread object and call any doneCallbacks with the given
+			 * args and refer the object as this.
+			 *
+			 * @memberof   Thread
+			 * @name       resolveWith
+			 * @param      {Object}     object  A object refer to doneCallbacks
+			 * @param      {...Object}  [args]  Optional arguments that are
+			 *                                  passed to the doneCallbacks.
+			 *
+			 * @return     {Thread}     { description_of_the_return_value }
+			 */
+			promise[self] = function() {
+				var args = slice.call(arguments);
+				if (status == 'pending') {
+					status = 'running';
+					if (self == 'resolveWith' && args.length) {
+						context = args.shift();
+					}
+					pump.apply(pump, args);
+				}
+				return promise;
+			};
+		});
+
+		if (arguments.length > 0) {
+			fn.each(slice.call(arguments), function() {
+				promise.add(this);
+			});
+		}
+
+		return promise;
+	};
+
+	/**
+	 * Representation of date and time.
+	 *
+	 * @class      DateTime (name)
+	 * @param      {String|Date|Number}   value   The formated date string,
+	 *                                            number or Date object
+	 * @return     {(Array|Date|Number)}  { description_of_the_return_value }
+	 */
+	fn.DateTime = function(value) {
+		var dateObject = null,
+			datetime = {
+				year: 0,
+				month: 0,
+				day: 0,
+				hour: 0,
+				minute: 0,
+				second: 0,
+				millis: 0,
+				timezoneOffset: (fn.isDefined(fn.DateTime.defaultTimezoneOffset)) ? fn.DateTime.defaultTimezoneOffset : (new Date()).getTimezoneOffset() / 60
+			},
+			monthString = {
+				0: 'January',
+				1: 'February',
+				2: 'March',
+				3: 'April',
+				4: 'May',
+				5: 'June',
+				6: 'July',
+				7: 'August',
+				8: 'September',
+				9: 'October',
+				10: 'November',
+				11: 'December'
+			},
+			monthMap = {},
+			weekdayString = {
+				0: 'Sunday',
+				1: 'Monday',
+				2: 'Theuday',
+				3: 'Wednesday',
+				4: 'Thursday',
+				5: 'Friday',
+				6: 'Saturday'
+			},
+	  		self;
+
+			fn.each(monthString, function(num, month) {
+				monthMap[month.substr(0, 3)] = num;
+			});
+
+			function parse(value) {
+				var dateString, dateDelimited, timeDelimited, subValue, matches, adjustment;
+				if (!fn.isDefined(value)) {
+					return parse(Date.now());
+				} else if (fn.isNumber(value)) {
+					return parse(new Date(value));
+				} else if (value.constructor == Date) {
+					dateObject = value;
+					datetime.year = dateObject.getFullYear();
+					datetime.month = dateObject.getMonth();
+					datetime.day = dateObject.getDate();
+					datetime.hour = dateObject.getHours();
+					datetime.minute = dateObject.getMinutes();
+					datetime.second = dateObject.getSeconds();
+					datetime.millis = dateObject.getMilliseconds();
+					return self;
+				} else if (!!(matches = regexTimestamp.exec(value))) {
+					// 2014-03-25T08:48:21Z or 2014-03-25T08:48:21+08:00
+					datetime.year = parseInt(matches[1]);
+					datetime.month = parseInt(matches[2]) - 1;
+					datetime.day = parseInt(matches[3]);
+					datetime.hour = parseInt(matches[4]);
+					datetime.minute = parseInt(matches[5]);
+					datetime.second = parseInt(matches[6]);
+					datetime.millis = 0;
+					if (matches[7] != 'Z') {
+						adjustment = -parseInt(matches[7].split(':')[0]);
+					}
+				} else if (fn.isString(value)) {
+					dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
+					dateDelimited = dateString.split(' ');
+
+					if (dateDelimited.length == 1 || dateDelimited.length == 2) {
+						subValue = dateDelimited[0].split((dateDelimited[0].indexOf('/') !== -1) ? '/' : '-');
+						datetime.month = parseInt(subValue[1]) - 1;
+						datetime.day = parseInt(subValue[2]);
+						datetime.year = parseInt(subValue[0]);
+					} else if (dateDelimited.length == 6) {
+						datetime.month = monthMap[dateDelimited[1]] || '';
+						datetime.day = parseInt(dateDelimited[2]);
+						datetime.year = parseInt(dateDelimited[3]);
+					}
+
+					if (dateDelimited.length == 2 || dateDelimited.length == 6) {
+						timeDelimited = ((dateDelimited.length == 6) ? dateDelimited[4] : dateDelimited[1]).split(':');
+						if (timeDelimited.length > 1) {
+							datetime.hour = parseInt(timeDelimited[0]);
+							datetime.minute = parseInt(timeDelimited[1]);
+							if (timeDelimited.length > 2) {
+								subValue = timeDelimited[2].split('.');
+								datetime.second = parseInt(subValue[0]);
+								datetime.millis = (subValue.length > 1) ? parseInt(subValue[1]) : 0;
+							}
+						}
+					}
+				}
+
+				update(adjustment);
+				return self;
+			}
+
+			self = {
+				constructor: fn.DateTime,
+
+				/**
+				 * Determines if the date is leap year.
+				 * @memberof   DateTime
+				 *
+				 * @return     {Number}  True if leap year, False otherwise.
+				 */
+				isLeapYear: function() {
+					var year = dateObject.getFullYear();
+					return ((year % 4 === 0) && (year % 100 !== 0)) || (year % 400 === 0);
+				},
+
+				/**
+				 * Gets the week of year.
+				 * @memberof   DateTime
+				 *
+				 * @return     {Number}  The week of year.
+				 */
+				getWeekOfYear: function() {
+					var newDate = new Date(dateObject);
+					newDate.setHours(0, 0, 0, 0);
+					newDate.setDate(newDate.getDate() + 4 - (newDate.getDay() || 7));
+					return Math.ceil((((newDate - new Date(newDate.getFullYear(), 0, 1)) / 8.64e7) + 1) / 7);
+				},
+
+				/**
+				 * Gets the day of year.
+				 * @memberof   DateTime
+				 *
+				 * @return     {Number}  The day of year.
+				 */
+				getDayOfYear: function() {
+					var month,
+						day,
+						isLeap = self.isLeapYear(),
+						dayCount = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334],
+						dayOfYear;
+
+					month = dateObject.getMonth();
+					day = dateObject.getDate();
+					dayOfYear = dayCount[month] + day;
+					if (month > 1 && isLeap) {
+						dayOfYear++;
+					}
+					return dayOfYear;
+				},
+
+				/**
+				 * Gets the frist day.
+				 * @memberof   DateTime
+				 *
+				 * @return     {Date}  The frist day.
+				 */
+				getFristDay: function() {
+					return fn.DateTime(new Date(datetime.year, datetime.month, 1, 0, 0, 0, 0));
+				},
+
+				/**
+				 * Gets the last day.
+				 * @memberof   DateTime
+				 *
+				 * @return     {Date}  The last day.
+				 */
+				getLastDay: function() {
+					var dayOfEnd = 30;
+					if (datetime.month % 7 % 2 === 0) {
+						dayOfEnd = 31;
+					} else if (datetime.month == 1) {
+						dayOfEnd = (self.isLeapYear()) ? 29 : 28;
+					}
+					return fn.DateTime(new Date(datetime.year, datetime.month, dayOfEnd, 23, 59, 59, 0));
+				},
+
+				/**
+				 * Gets the date object.
+				 * @memberof   DateTime
+				 *
+				 * @return     {Date}  The date.
+				 */
+				getDate: function() {
+					return dateObject;
+				},
+
+				/**
+				 * Gets the plain object contain year, month, day, hour, minute,
+				 * second and millisecond.
+				 * @memberof   DateTime
+				 *
+				 * @return     {PlainObject}  The value.
+				 */
+				getValue: function() {
+					return datetime;
+				},
+
+				/**
+				 * Sets the timezone offset. If the timezone offset is not equal as
+				 * current timezone, the date time will be adjusted
+				 * @memberof   DateTime
+				 *
+				 * @param      {Number}    value   The timezone offset
+				 * @return     {DateTime}  { description_of_the_return_value }
+				 */
+				setTimezoneOffset: function(value) {
+					var newTz = -getTimezoneOffset(value), diff = datetime.timezoneOffset - newTz;
+					if (diff !== 0) {
+						dateObject.setHours(dateObject.getHours() + diff);
+						datetime.hour = dateObject.getHours();
+						datetime.timezoneOffset = newTz;
+					}
+					return self;
+				},
+
+				/**
+				 * Returns date formatted according to given format, stardard or PHP
+				 * style
+				 * @memberof   DateTime
+				 *
+				 * @param      {String}  format  The format
+				 * @param      {String}  type    The type, php or else
+				 * @return     {String}  { description_of_the_return_value }
+				 */
+				format: function(format, type) {
+					if (format && fn.isString(format)) {
+						var replacementMap = {};
+						if (type == 'php') {
+							replacementMap = {
+								d: ('0' + dateObject.getDate()).slice(-2),
+								D: weekdayString[dateObject.getDay()].substring(0, 3),
+								j: dateObject.getDate(),
+								l: weekdayString[dateObject.getDay()],
+								N: dateObject.getDay() + 1,
+								S: (function(day) {
+									if (day >= 10 && day <= 19) {
+										return 'th';
+									} else {
+										switch (day % 10) {
+											case 1:
+												return 'st';
+											case 2:
+												return 'nd';
+											case 3:
+												return 'rd';
+											default:
+												return 'th';
+										}
+									}
+								})(dateObject.getDate()),
+								z: self.getDayOfYear(),
+								W: self.getWeekOfYear(),
+								F: monthString[dateObject.getMonth()],
+								m: ('0' + (dateObject.getMonth() + 1)).slice(-2),
+								M: monthString[dateObject.getMonth()].substring(0, 3),
+								n: dateObject.getMonth() + 1,
+								t: (function(month) {
+									if (month == 2) {
+										return 28 + (self.isLeapYear() ? 1 : 0);
+									} else if ([4, 6, 9, 11].indexOf(month) != -1) {
+										return 30;
+									}
+									return 31;
+								})(dateObject.getMonth()),
+								L: (self.isLeapYear()) ? 1 : 0,
+								Y: dateObject.getFullYear(),
+								y: ('0' + dateObject.getFullYear()).slice(-2),
+								a: (dateObject.getHours() >= 12) ? 'pm' : 'am',
+								A: (dateObject.getHours() >= 12) ? 'PM' : 'AM',
+								h: ('0' + (dateObject.getHours() % 12) + 1).slice(-2),
+								H: ('0' + dateObject.getHours()).slice(-2),
+								g: (dateObject.getHours() % 12) + 1,
+								G: dateObject.getHours(),
+								i: ('0' + dateObject.getMinutes()).slice(-2),
+								s: ('0' + dateObject.getSeconds()).slice(-2),
+								u: dateObject.getMilliseconds(),
+								Z: datetime.timezoneOffset * 60 * 60 * -1,
+								U: Math.round(dateObject.getTime() / 1000)
+							};
+							replacementMap.c = [replacementMap.Y, replacementMap.m, replacementMap.d].join('-') + 'T' + [replacementMap.H, replacementMap.i, replacementMap.s].join(':');
+							replacementMap.r = replacementMap.D + ', ' + replacementMap.d + ' ' + replacementMap.M + ' ' + replacementMap.Y + ' ' + [replacementMap.H, replacementMap.i, replacementMap.s].join(':') + getTimezone(true) + '00';
+						} else {
+							replacementMap = {
+								yyyy: ('000' + dateObject.getFullYear()).slice(-4),
+								yyy: ('00' + dateObject.getFullYear()).slice(-4),
+								yy: ('0' + dateObject.getFullYear()).slice(-2),
+								y: ('' + dateObject.getFullYear()).slice(-2),
+								MMMM: monthString[dateObject.getMonth()],
+								MMM: monthString[dateObject.getMonth()].substring(0, 3),
+								MM: ('0' + (dateObject.getMonth() + 1)).slice(-2),
+								M: dateObject.getMonth() + 1,
+								dddd: weekdayString[dateObject.getDay()],
+								ddd: weekdayString[dateObject.getDay()].substring(0, 3),
+								dd: ('0' + (dateObject.getDay() + 1)).slice(-2),
+								d: dateObject.getDay(),
+								hh: ('0' + ((dateObject.getHours() % 12) + 1)).slice(-2),
+								h: (dateObject.getHours() % 12) + 1,
+								HH: ('0' + dateObject.getHours()).slice(-2),
+								H: dateObject.getHours(),
+								mm: ('0' + dateObject.getMinutes()).slice(-2),
+								m: dateObject.getMinutes(),
+								ss: ('0' + dateObject.getSeconds()).slice(-2),
+								s: dateObject.getSeconds(),
+								tt: (dateObject.getHours() >= 12) ? 'PM' : 'AM',
+								t: (dateObject.getHours() >= 12) ? 'P' : 'A',
+								q: Math.floor((dateObject.getMonth() + 3) / 3),
+								f: dateObject.getMilliseconds()
+							};
+						}
+
+						return format.replace(new RegExp("((?:\\\\\\\\)*(?:\\\\.)?)(" + Object.keys(replacementMap).join('|') + ')', 'g'), function(fullmatch, escaped, pattern, offset, original) {
+							if (fn.isDefined(replacementMap[pattern])) {
+								return escaped + replacementMap[pattern];
+							}
+							return fullmatch;
+						});
+					}
+					return '';
+				}
+			};
+
+		fn.each(['day', 'month', 'year', 'hour', 'minute', 'second', 'millis'], function(i) {
+			var name = this.charAt(0).toUpperCase() + this.slice(1), prop = this;
+			/**
+			 * Resets the current year of the DateTime object to a different
+			 * year.
+			 * @memberof   DateTime
+			 *
+			 * @name       setYear
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Resets the current month of the DateTime object to a different
+			 * month.
+			 * @memberof   DateTime
+			 *
+			 * @name       setMonth
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Resets the current day of the DateTime object to a different day.
+			 * @memberof   DateTime
+			 *
+			 * @name       setDay
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Resets the current hour of the DateTime object to a different
+			 * hour.
+			 * @memberof   DateTime
+			 *
+			 * @name       setHour
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Resets the current minute of the DateTime object to a different
+			 * minute.
+			 * @memberof   DateTime
+			 *
+			 * @name       setMinute
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Resets the current second of the DateTime object to a different
+			 * second.
+			 * @memberof   DateTime
+			 *
+			 * @name       setSecond
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Resets the current millisecond of the DateTime object to a
+			 * different millisecond.
+			 * @memberof   DateTime
+			 *
+			 * @name       setMillis
+			 * @param      {Number}  value   { parameter_description }
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			self['set' + name] = function(value) {
+				datetime[prop] = parseInt(value);
+				update();
+
+				return self;
+			};
+			/**
+			 * Adds the specified year to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addYear
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Adds the specified month to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addMonth
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Adds the specified day to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addDay
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Adds the specified hour to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addHour
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Adds the specified minute to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addMinute
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Adds the specified second to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addSecond
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			/**
+			 * Adds the specified millisecond to the current DateTime object.
+			 * @memberof   DateTime
+			 *
+			 * @name       addMillis
+			 * @param      {Number}  value
+			 * @return     {String}  { description_of_the_return_value }
+			 */
+			self['add' + name] = function(value) {
+				datetime[prop] += parseInt(value);
+				update();
+
+				return self;
+			};
+		});
+
+		function getTimezone(stringformat) {
+			var tz = datetime.timezoneOffset;
+			if (stringformat) {
+				tz = (tz < 0) ? '+' + ('0' + (tz * -1)).slice(-2) : '+' + ('0' + tz).slice(-2);
+			}
+			return tz;
+		}
+
+		function update(adjustment) {
+			dateObject = new Date(datetime.year, datetime.month, datetime.day, datetime.hour, datetime.minute, datetime.second, datetime.millis);
+			if (fn.isDefined(adjustment)) {
+				dateObject.setHours(dateObject.getHours() + adjustment);
+				dateObject.setHours(dateObject.getHours() - datetime.timezoneOffset);
+			}
+
+			datetime.year = dateObject.getFullYear();
+			datetime.month = dateObject.getMonth();
+			datetime.day = dateObject.getDate();
+			datetime.hour = dateObject.getHours();
+			datetime.minute = dateObject.getMinutes();
+			datetime.second = dateObject.getSeconds();
+			datetime.millis = dateObject.getMilliseconds();
+		}
+
+		parse(value);
+		return self;
+	};
+
+	function getTimezoneOffset(value) {
+		var matches;
+		if (value == 'EST') {
+			value = -3;
+		} else if (!!(matches = regexUTCGMT.exec(value))) {
+			value = (matches[2]) ? parseInt(matches[2]) : 0;
+		} else if (value == 'ET') {
+			value = -4;
+		} else if (value == 'PST') {
+			value = -8;
+		} else {
+			value = parseInt(value);
+			value = (isNaN(value)) ? 0 : value;
+		}
+		return value;
+	}
+
+	// CSS3 Animation
+	var support3D = null,
+		transformStyle = null,
+		transformKeyframe = null;
+
+	/**
+	 * The class of CSS3 KeyFrame Rule
+	 *
+	 * @class      Keyframe (name)
+	 * @param      {String}    name    The animation name
+	 * @return     {Keyframe}  { description_of_the_return_value }
+	 */
+	fn.Keyframe = function(name) {
+		if (transformKeyframe === null) {
+			transformKeyframe = {};
+			doc.head.appendChild(doc.createElement('style'));
+			transformStyle = document.styleSheets[document.styleSheets.length - 1];
+
+			var ss = doc.styleSheets;
+			fn.each(ss, function() {
+				if (this.cssRules) {
+					fn.each(this.cssRules, function() {
+						if (this.type == win.CSSRule.KEYFRAMES_RULE || this.type == win.CSSRule.WEBKIT_KEYFRAMES_RULE) {
+							transformKeyframe[this.name] = this;
+						}
+					});
+				}
+			});
+		}
+
+		if (!fn.isDefined(transformKeyframe[name])) {
+			var keyframesSyntax = '@' + (fn.browser.webkit ? '-webkit-' : '') + 'keyframes ' + name + '{}', index = transformStyle.cssRules.length;
+			transformStyle.insertRule(keyframesSyntax, index);
+			transformKeyframe[name] = transformStyle.cssRules[index];
+		}
+
+		return (function(keyform) {
+			var action = {
+				constructor: fn.Keyframe,
+
+				/**
+				 * Gets the animation name.
+				 *
+				 * @name       getName
+				 * @memberof   Keyframe
+				 *
+				 * @return     {String}  The name.
+				 */
+				getName: function() {
+					return name;
+				},
+
+				/**
+				 * Add 1 Transform object the specified frame
+				 *
+				 * @name       add
+				 * @memberof   Keyframe
+				 *
+				 * @param      {Number}     frame   The index of the frame (0-100)
+				 * @param      {Transform}  object  The Transform object
+				 * @return     {Keyframe}   { description_of_the_return_value }
+				 */
+				add: function(frame, object) {
+					if (object && object.constructor == fn.Transform) {
+						frame = parseFloat(frame);
+						if (frame < 0) {
+							frame = 0;
+						}
+						keyform.appendRule(frame + '% { ' + object.getRule() + '}');
+					}
+					return action;
+				},
+
+				/**
+				 * Remove the specified frame
+				 *
+				 * @name       remove
+				 * @memberof   Keyframe
+				 *
+				 * @param      {Number}    frame   The index of the frame (0-100)
+				 * @return     {Keyframe}  { description_of_the_return_value }
+				 */
+				remove: function(frame) {
+					frame = parseFloat(frame);
+					if (frame < 0) {
+						frame = 0;
+					}
+					keyform.deleteRule(frame + '%');
+					return action;
+				},
+
+				/**
+				 * Apply the keyframe rule to matched elements
+				 *
+				 * @name       remove
+				 * @memberof   Keyframe
+				 *
+				 * @param      {String|DOMElement|JetObject}    object   A string of selector or matched elements
+				 * @param      {PlainObject}    setting   Animation setting
+				 * @return     {Keyframe}  { description_of_the_return_value }
+				 */
+				apply: function(object, setting) {
+					var jetObj;
+
+					if (!fn.isDefined(setting)) {
+						setting = {};
+					}
+
+					setting.duration = parseInt(setting.duration) || 500;
+					setting.delay = parseInt(setting.delay);
+					if (fn.isDefined(setting.loop)) {
+						setting.loop = parseInt(setting.loop);
+					}
+					if (!setting.loop) {
+						setting.loop = 'infinite';
+					}
+
+					if (!setting.easing || !(new RegExp(easingType)).test(setting.easing)) {
+						setting.easing = 'linear';
+					}
+
+					if (!setting.direction || !(new RegExp('(normal|reverse|alternate|alternate-reverse)')).test(setting.direction)) {
+						setting.direction = 'normal';
+					}
+
+					if (!setting.fillmode || !(new RegExp('(none|forwards|backwards|both)')).test(setting.fillmode)) {
+						setting.fillmode = 'none';
+					}
+
+					if (fn.isDefined(object)) {
+						if (object.constructor == JetObject) {
+							jetObj = object;
+						} else {
+							jetObj = Jet(object);
+						}
+
+						jetObj.each(function() {
+							var elem = Jet(this);
+							elem.removeCss(resetAnimation);
+							// 0 tick delay to restart the animation
+							setTimeout(function() {
+								elem.css({
+									'animation-name': name,
+									'animation-duration': (setting.duration / 1000) + 's',
+									'animation-iteration-count': setting.loop,
+									'animation-direction': setting.direction,
+									'animation-timing-function': setting.easing,
+									'animation-fill-mode': setting.fillmode,
+									'animation-delay': (setting.delay / 1000) + 's'
+								});
+							}, 0);
+						});
+					}
+					return action;
+				}
+			};
+			return action;
+		})(transformKeyframe[name]);
+	};
+
+	/**
+	 * CSS transforms animation class, working with Keyframe class or bind to specified
+	 * elements directly.
+	 *
+	 * @class      Transform (name)
+	 * @param      {PlainObject}   settings  The Transform settings in Plain Object
+	 * @return     {Transform}  { description_of_the_return_value }
+	 */
+	/**
+	 * CSS transforms animation class, working with Keyframe class or bind to specified
+	 * elements directly.
+	 *
+	 * @class      Transform (name)
+	 * @param      {PlainObject}   settings  The Transform settings in Plain Object
+	 * @param      {DomElement|JetObject}   [elems]  The DOMElements to bind
+	 * @return     {Transform}  { description_of_the_return_value }
+	 */
+	fn.Transform = function(settings, elems) {
+		var cssProp = {},
+			waitForSetup = false,
+			backface = null,
+			duration = 0,
+			delay = 0,
+			easing = 'linear',
+			elements = null,
+			self = {
+				constructor: fn.Transform,
+
+				/**
+				 * Set the Transform setting by a Plain Object
+				 * @memberof   Transform
+				 *
+				 * @param      {PlainObject}  settings  A set of Transform setting
+				 * @return     {Transform}    { description_of_the_return_value }
+				 */
+				set: function(settings) {
+					if (fn.isPlainObject(settings)) {
+						waitForSetup = true;
+						fn.each(settings, function(name, val) {
+							if (regexTransformMethod.test(name)) {
+								self[name].apply(self, (fn.isArray(val)) ? val : [val]);
+							}
+						});
+						waitForSetup = false;
+					}
+					commit();
+					return self;
+				},
+
+				/**
+				 * Set the animation time
+				 * @memberof   Transform
+				 *
+				 * @param      {Number}  value   A string or number determining how
+				 *                               long the transform animation will
+				 *                               run.
+				 * @return     {Transform}  { description_of_the_return_value }
+				 */
+				duration: function(value) {
+					duration = parseInt(value) || 0;
+					commit();
+					return self;
+				},
+
+				/**
+				 * Set the delay time
+				 * @memberof   Transform
+				 *
+				 * @param      {Number}  value   A string or number determining how
+				 *                               long the transform animation will
+				 *                               delay to run.
+				 * @return     {Transform}  { description_of_the_return_value }
+				 */
+				delay: function(value) {
+					delay = parseInt(value) || 0;
+					commit();
+					return self;
+				},
+
+
+				/**
+				 * Set the easing function to use for the transition.
+				 * @memberof   Transform
+				 *
+				 * @param      {String}  value   A string indicating which easing
+				 *                               function to use for the transition.
+				 * @return     {Transform}  { description_of_the_return_value }
+				 */
+				easing: function(value) {
+					if (!value || !(new RegExp(easingType)).test(value)) {
+						easing = 'linear';
+					} else {
+						easing = value;
+					}
+					commit();
+					return self;
+				},
+
+				/**
+				 * Gets the CSS rules including css style and transform style.
+				 * @memberof   Transform
+				 *
+				 * @param      {DOMElement}  elem    Used to call in from callback
+				 *                                   function
+				 * @return     {String}      The rule.
+				 */
+				getRule: function(elem) {
+					var cssRule = fn.browser.prefix + 'transform: ' + getTransformSyntax() + ';';
+					fn.each(cssProp, function(prop, value) {
+						if (!fn.isCallable(value) || (fn.isCallable(value) && fn.isDOMElement(elem))) {
+							cssRule += prop + ': ' + ((fn.isCallable(value)) ? value.call(elem) : value);
+						}
+					});
+					return cssRule;
+				},
+
+				/**
+				 * Set ot get the backface visibility setting
+				 * @memberof   Transform
+				 *
+				 * @param      {boolean}  enable  A Boolean indicating whether to
+				 *                                show the backface
+				 * @return     {Transform}   { description_of_the_return_value }
+				 */
+				backface: function(enable) {
+					if (fn.isDefined(enable)) {
+						backface = !!enable;
+						commit();
+						return self;
+					} else {
+						return backface;
+					}
+				},
+
+				/**
+				 * Set one or more CSS properties for every matched element in
+				 * Transform. Only works n Keyframe
+				 * @memberof   Transform
+				 *
+				 * @param      {String}           css     A CSS property or an array
+				 *                                        of one or more CSS
+				 *                                        properties.
+				 * @param      {object|callback}  value   A value to set for the
+				 *                                        property or a function
+				 *                                        returning the value to
+				 *                                        set. this is the element
+				 *                                        passed from getRule.
+				 * @return     {Transform}        { description_of_the_return_value }
+				 */
+				css: function(css, value) {
+					if (elements) {
+						elements.css(css, value);
+					} else {
+						if (fn.isPlainObject(css)) {
+							fn.each(css, function(style, val) {
+								self.css(style, val);
+							});
+						} else {
+							if (fn.isDefined(value)) {
+								fn.each(this, function() {
+									cssProp[css] = value;
+								});
+							}
+						}
+					}
+					return self;
+				},
+
+				/**
+				 * Bind to specified elements
+				 * @memberof   Transform
+				 *
+				 * @param      {DOMElement}  elem    One or more element to bind for
+				 * @return     {Transform}    { description_of_the_return_value }
+				 */
+				bind: function(elem) {
+					if (fn.isDOMElement(elem)) {
+						elem = Jet(elem);
+					}
+					if (elem.constructor == JetObject) {
+						elements = elem;
+						elem.data('transform', self, true);
+						commit();
+					}
+					return self;
+				},
+
+				/**
+				 * Reset all transform value
+				 * @memberof   Transform
+				 *
+				 * @return     {Transform}    { description_of_the_return_value }
+				 */
+				reset: function() {
+					if (elements) {
+						elements.removeCss((((fn.browser.webkit) ? '-webkit-' : '') + 'backface-visibility') + ' transform ');
+					}
+					return self;
+				}
+			},
+			property = {
+				rotate: {},
+				skew: {},
+				move: {},
+				scale: {}
+			};
+
+		function getTransformSyntax() {
+			var cssList = [];
+			fn.each(property, function(param, values) {
+				var keys = Object.keys(values), dimension;
+
+				param = (param == 'move') ? 'translate' : param;
+				// Use 3D
+				if (keys.length > 0) {
+					if (fn.isDefined(values.Z) && support3D) {
+						if (param == 'rotate' && values.degree) {
+							cssList.push(param + '3d(' + values.X + ', ' + values.Y + ', ' + values.Z + ', ' + values.degree + ')');
+						} else {
+							cssList.push(param + '3d(' + values.X + ', ' + values.Y + ', ' + values.Z + ')');
+						}
+					} else {
+						if (keys.length == 1) {
+							dimension = Object.keys(values)[0];
+							cssList.push(param + dimension + '(' + values[dimension] + ')');
+						} else {
+							cssList.push(param + '(' + values.X + ', ' + values.Y + ')');
+						}
+					}
+				}
+			});
+			return cssList.join(' ');
+		}
+
+		function commit() {
+			if (waitForSetup) {
+				return false;
+			}
+
+			// When the Transform has bound elements, update the css style when value has changed
+			if (elements) {
+				if (duration > 0) {
+					// Fix some browser will play the animation from default value if the duration is set
+					setTimeout(function() {
+						fn.each(elements, function() {
+							var matches, transition = {};
+							while (!!(matches = transitionFormula.exec(Jet(this).css('transition')))) {
+								transition[matches[1]] = matches[0];
+							}
+							transition.transform = 'transform ' + (((duration > 0) ? duration : 0) / 1000) + 's ' + easing + ((delay > 0) ? ' ' + (delay / 1000) + 's' : '');
+							delete transition.all;
+							transition = Object.keys(transition).map(function (key) {
+								return transition[key];
+							}).join(', ');
+							Jet(this).css('transition', transition);
+						});
+						elements.css('transform', getTransformSyntax());
+						if (backface !== null) {
+							elements.css(((fn.browser.webkit) ? '-webkit-' : '') + 'backface-visibility', (!backface) ? 'hidden' : '');
+						}
+		
+						if (Object.keys(cssProp).length > 0) {
+							elements.css(cssProp);
+						}
+					}, 0);
+				}
+			}
+		}
+
+		if (support3D === null) {
+			var div = doc.createElement('div');
+
+			support3D = false;
+
+			if (fn.isDefined(div.style.perspective)) {
+				support3D = true;
+			} else {
+				fn.each(support3D, function() {
+					if (fn.isDefined(div.style[this + 'Perspective'])) {
+						support3D = true;
+						return false;
+					}
+				});
+			}
+		}
+
+		fn.each(['rotate', 'skew', 'move', 'scale'], function(i, method) {
+			var unit = '';
+			if (method == 'rotate' || method == 'skew') {
+				unit = 'deg';
+			} else if (method == 'move') {
+				unit = 'px';
+			}
+			/**
+			 * Set the X and Y value on rotate
+			 * @memberof   Transform
+			 *
+			 * @name       rotate
+			 *
+			 * @param      {Number}  x    X-asis value
+			 * @param      {Number}  y    Y-asis value
+			 * @return     {Transform}    { description_of_the_return_value }
+			 */
+			/**
+			 * Set the X and Y value on skew
+			 * @memberof   Transform
+			 *
+			 * @name       skew
+			 *
+			 * @param      {Number}  x    X-asis value
+			 * @param      {Number}  y    Y-asis value
+			 * @return     {Transform}    { description_of_the_return_value }
+			 */
+			/**
+			 * Set the X and Y value on scale
+			 * @memberof   Transform
+			 *
+			 * @name       scale
+			 *
+			 * @param      {Number}  x    X-asis value
+			 * @param      {Number}  y    Y-asis value
+			 * @return     {Transform}    { description_of_the_return_value }
+			 */
+			/**
+			 * Set the X and Y value on translate
+			 * @memberof   Transform
+			 *
+			 * @name       move
+			 *
+			 * @param      {Number}  x    X-asis value
+			 * @param      {Number}  y    Y-asis value
+			 * @return     {Transform}    { description_of_the_return_value }
+			 */
+			self[method] = function(x, y) {
+				property[method].X = (parseFloat(x) || 0) + unit;
+				property[method].Y = (parseFloat(y) || 0) + unit;
+				commit();
+				return self;
+			};
+			fn.each(['X', 'Y', 'Z'], function(i, dimension) {
+				if (this != 'Z' || (this == 'Z' && (method == 'move' || method == 'scale'))) {
+					/**
+					 * Set the X value on rotateX
+					 * @memberof   Transform
+					 *
+					 * @name       rotateX
+					 *
+					 * @param      {Number}     x       X-asis value
+					 * @return     {Transform}  { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Y value on rotateY
+					 * @memberof   Transform
+					 *
+					 * @name       rotateY
+					 *
+					 * @param      {Number}  y    Y-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Z value on rotateZ
+					 * @memberof   Transform
+					 *
+					 * @name       rotateZ
+					 *
+					 * @param      {Number}  z    Z-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the X value on skewX
+					 * @memberof   Transform
+					 *
+					 * @name       skewX
+					 *
+					 * @param      {Number}  x    X-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Y value on skewY
+					 * @memberof   Transform
+					 *
+					 * @name       skewY
+					 *
+					 * @param      {Number}  y    Y-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the X value on scaleX
+					 * @memberof   Transform
+					 *
+					 * @name       scaleX
+					 *
+					 * @param      {Number}  x    X-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Y value on scaleY
+					 * @memberof   Transform
+					 *
+					 * @name       scaleY
+					 *
+					 * @param      {Number}  y    Y-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Z value on scaleZ
+					 * @memberof   Transform
+					 *
+					 * @name       scaleZ
+					 *
+					 * @param      {Number}  z    Z-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the X value on translateX
+					 * @memberof   Transform
+					 *
+					 * @name       moveX
+					 *
+					 * @param      {Number}  x    X-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Y value on translateY
+					 * @memberof   Transform
+					 *
+					 * @name       moveY
+					 *
+					 * @param      {Number}  y    Y-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					/**
+					 * Set the Z value on translateZ
+					 * @memberof   Transform
+					 *
+					 * @name       moveZ
+					 *
+					 * @param      {Number}  z    Z-asis value
+					 * @return     {Transform}    { description_of_the_return_value }
+					 */
+					self[method + dimension] = function(value) {
+						value = (parseFloat(value) || 0) + unit;
+						property[method][dimension] = value;
+						commit();
+						return self;
+					};
+					if (this == 'Z') {
+						/**
+						 * Set the X, Y, Z value on skew3d
+						 * @memberof   Transform
+						 *
+						 * @name       skew3d
+						 *
+						 * @param      {Number}     x       X-asis value
+						 * @param      {Number}     y       Y-asis value
+						 * @param      {Number}     z       Z-asis value
+						 * @return     {Transform}  { description_of_the_return_value }
+						 */
+						/**
+						 * Set the X, Y, Z value on scale3d
+						 * @memberof   Transform
+						 *
+						 * @name       scale3d
+						 *
+						 * @param      {Number}     x       X-asis value
+						 * @param      {Number}     y       Y-asis value
+						 * @param      {Number}     z       Z-asis value
+						 * @return     {Transform}  { description_of_the_return_value }
+						 */
+						/**
+						 * Set the X, Y, Z value on translate3d
+						 * @memberof   Transform
+						 *
+						 * @name       move3d
+						 *
+						 * @param      {Number}  x    X-asis value
+						 * @param      {Number}  y    Y-asis value
+						 * @param      {Number}  z    Z-asis value
+						 * @return     {Transform}    { description_of_the_return_value }
+						 */
+						self[method + '3d'] = function(x, y, z) {
+							property[method].X = (parseFloat(x) || 0) + unit;
+							property[method].Y = (parseFloat(y) || 0) + unit;
+							property[method].Z = (parseFloat(z) || 0) + unit;
+							commit();
+							return self;
+						};
+					}
+				}
+			});
+		});
+
+		/**
+		 * Set the X, Y, Z and degree value on rotate3d
+		 * @memberof   Transform
+		 * @name       rotate3d
+		 *
+		 * @param      {Number}     x       X-asis value
+		 * @param      {Number}     y       Y-asis value
+		 * @param      {Number}     z       Z-asis value
+		 * @param      {Number}     degree  Rotate degree
+		 * @return     {Transform}  { description_of_the_return_value }
+		 */
+		self.rotate3d = function(x, y, z, degree) {
+			property.rotate.X = (parseFloat(x) || 0);
+			property.rotate.Y = (parseFloat(y) || 0);
+			property.rotate.Z = (parseFloat(z) || 0);
+			property.rotate.degree = (parseFloat(degree) || 0) + 'deg';
+			commit();
+			return self;
+		};
+
+		var bindElement = null;
+		if (settings && (fn.isDOMElement(settings) || settings.constructor == JetObject)) {
+			bindElement = settings;
+			settings = null;
+		} else if (elems && (fn.isDOMElement(elems) || elems.constructor == JetObject)) {
+			bindElement = elems;
+		}
+		
+		if (bindElement) {
+			self.bind((fn.isDOMElement(bindElement)) ? Jet(bindElement) : bindElement);
+		}
+		
+		if (fn.isPlainObject(settings)) {
+			self.set(settings);
+		}
+
+		return self;
+	};
+
+	/**
+	 * Sets the default timezone offset.
+	 *
+	 * @name       setDefaultTimezoneOffset
+	 * @memberof   DateTime
+	 *
+	 * @param      {Number}  value   The timezone offset in hour
+	 */
+	fn.DateTime.setDefaultTimezoneOffset = function(value) {
+		fn.DateTime.defaultTimezoneOffset = -getTimezoneOffset(value);
+	};
+
+	var ajaxSettings = {
+		cached: {},
+		default: {
+			url: location.href,
+			type: 'GET',
+			processData: true,
+			async: true,
+			contentType: 'application/x-www-form-urlencoded; charset=UTF-8',
+
+			/* Default Null */
+			timeout: 0,
+			data: null,
+			dataType: null,
+			username: null,
+			password: null,
+			cache: null,
+			headers: {},
+
+			accepts: {
+				'*': allType,
+				text: 'text/plain',
+				html: 'text/html',
+				xml: 'application/xml, text/xml',
+				json: 'application/json, text/javascript'
+			},
+			converters: {
+				'* text': win.String,
+				'text html': true,
+				'text json': fn.parseJSON,
+				'text xml': fn.parseXML
+			}
+		}
+	};
+	ajaxSettings._default = fn.clone(ajaxSettings.default);
+
+	/**
+	 * Setup the default ajax setting
+	 *
+	 * @name       ajaxSetup
+	 *
+	 * @param      {String}     param   The setting parameter
+	 * @param      {*}          value   The setting value
+	 * @return     {JetObject}  { description_of_the_return_value }
+	 */
+	fn.ajaxSetup = function(param, value) {
+		if (fn.isPlainObject(param)) {
+			fn.each(param, fn.ajaxSetup);
+		} else {
+			if (fn.isDefined(ajaxSettings.default[param])) {
+				ajaxSettings.default[param] = value;
+			}
+		}
+		return this;
+	};
+
+	/**
+	 * Resets to default ajax setting
+	 * @name       ajaxReset
+	 *
+	 * @return     {JetObject}  { description_of_the_return_value }
+	 */
+	fn.ajaxReset = function() {
+		ajaxSettings.default = fn.clone(ajaxSettings._default);
+		return this;
+	};
+
+	/**
+	 * Perform an asynchronous HTTP (Ajax) request.
+	 *
+	 * @name       ajax
+	 *
+	 * @param      {String}       url       A url to perform an asynchronous
+	 *                                      HTTP
+	 * @param      {PlainObject}  settings  A plain object including url and
+	 *                                      setting
+	 * @return     {Thread}       { description_of_the_return_value }
+	 */
+	fn.ajax = function(url, settings) {
+		if (fn.isPlainObject(url)) {
+			settings = url;
+			url = settings.url;
+		}
+		if (!fn.isPlainObject(settings)) {
+			settings = ajaxSettings.default;
+		} else {
+			fn.each(ajaxSettings.default, function(key, val) {
+				if (key != 'headers' && key != 'accepts' && key != 'converters') {
+					if (!fn.isDefined(settings[key])) {
+						settings[key] = val;
+					}
+				}
+			});
+		}
+		url = url || ajaxSettings.default.url;
+
+		var thread = fn.Thread(function() {
+			var xmlHttp = null,
+				action = this,
+				converters = {};
+
+			action.wait();
+
+			// settings.beforeSend
+			if (fn.isCallable(settings.beforeSend)) {
+				if (!settings.beforeSend.call(xmlHttp, xmlHttp)) {
+					action.reject();
+				}
+			}
+
+			function callComplete() {
+				// settings.complete
+				if (!fn.isIterator(settings.complete)) {
+					settings.complete = [settings.complete];
+				}
+				fn.each(settings.complete, function() {
+					if (fn.isCallable(this)) {
+						this.call(this, xmlHttp, xmlHttp.statusText);
+					}
+				});
+			}
+
+			// settings.crossDomain
+			if (settings.crossDomain || settings.dataType == 'script') {
+				if (settings.dataType != 'script') {
+					// settings.jsonp
+					var jsonpFunc = '';
+					if (settings.jsonp && fn.isString(settings.jsonp)) {
+						jsonpFunc = settings.jsonp;
+					} else {
+						jsonpFunc = Math.random().toString(36).replace(/\d/g, '').slice(2, 7);
+						if (!win._ajaxCallback) {
+							win._ajaxCallback = {};
+						}
+						win._ajaxCallback[jsonpFunc] = (fn.isCallable(settings.jsonpCallback)) ? settings.jsonpCallback : action.resume;
+						jsonpFunc = 'window._ajaxCallback.' + jsonpFunc;
+					}
+					url = url + ((/\?/).test(url) ? '&' : '?') + 'callback=' + jsonpFunc;
+				}
+
+				var tag = doc.createElement('script');
+				// settings.data
+				if (settings.data) {
+					settings.data = fn.param(settings.data);
+					url += '&' + settings.data;
+				}
+
+				// settings.scriptCharset
+				if (settings.scriptCharset) {
+					tag.charset = settings.scriptCharset;
+				}
+
+				tag.src = url;
+				doc.getElementsByTagName('head')[0].appendChild(tag);
+				tag.onload = function() {
+					callComplete();
+				};
+			} else {
+				xmlHttp = new XMLHttpRequest();
+				// settings.method
+				if (!settings.method) {
+					settings.method = settings.method || settings.type || 'GET';
+				}
+				settings.method = settings.method.toUpperCase();
+
+				// settings.data
+				if (settings.data) {
+					if (settings.processData && !fn.isString(settings.data) && (settings.method == 'GET' || settings.data.constructor != FormData)) {
+						settings.data = fn.param(settings.data);
+					}
+					if (settings.method == 'GET') {
+						url += ((/\?/).test(url) ? '&' : '?') + settings.data;
+					}
+				}
+
+				// settings.cache
+				if (!settings.cache && (!settings.dataType || settings.dataType == 'jsonp' || settings.dataType == 'script')) {
+					url = url + ((/\?/).test(url) ? '&' : '?') + (new Date()).getTime();
+				}
+
+				if (!fn.isDefined(settings.async)) {
+					settings.async = true;
+				}
+				xmlHttp.open(settings.method, url, settings.async, settings.username, settings.password);
+
+				// settings.timeout
+				if (parseInt(settings.timeout) > 0) {
+					xmlHttp.timeoutTimer = setTimeout(function() {
+						xmlHttp.abort('timeout');
+					}, parseInt(settings.timeout));
+				}
+
+				// settings.accepts
+				if (!fn.isPlainObject(settings.accepts)) {
+					settings.accepts = {};
+				}
+				fn.extend(settings.accepts, ajaxSettings.default.accepts);
+				xmlHttp.setRequestHeader('Accept', (settings.dataType && settings.accepts[settings.dataType]) ? settings.accepts[settings.dataType] + ((settings.dataType !== '*') ? ', ' + allType + '; q=0.01' : '') : settings.accepts['*']);
+
+				// settings.contentType
+				if (settings.data && settings.data.constructor == FormData) {
+					settings.contentType = 'multipart/form-data; charset=UTF-8';
+				} else {
+					if (!fn.isDefined(settings.contentType)) {
+						settings.contentType = 'application/x-www-form-urlencoded; charset=UTF-8';
+					}
+					if (settings.contentType !== false) {
+						xmlHttp.setRequestHeader('Content-Type', settings.contentType);
+					}
+				}
+
+				// settings.converters
+				if (fn.isPlainObject(settings.converters)) {
+					fn.each(settings.converters, function(name, callback) {
+						name = name.trim();
+						if (/[\w-]+\s[\w-]/.test(name) && (fn.isCallable(callback) || callback === true)) {
+							converters[name] = callback;
+						}
+					});
+				}
+				fn.extend(converters, ajaxSettings.default.converters);
+
+				// settings.headers
+				if (fn.isPlainObject(settings.headers)) {
+					fn.each(settings.headers, function(name, value) {
+						xmlHttp.setRequestHeader(name.trim(), value);
+					});
+				}
+
+				// settings.mimeType
+				if (settings.mimeType && fn.isString(settings.mimeType)) {
+					xmlHttp.overrideMimeType(settings.mimeType);
+				}
+
+				xmlHttp.onreadystatechange = function() {
+					if (xmlHttp.readyState != 4) return;
+
+					// settings.statusCallback
+					if (fn.isCallable(settings.statusCallback)) {
+						if (settings.statusCallback[xmlHttp.status]) {
+							settings.statusCallback[xmlHttp.status].call(xmlHttp);
+						}
+					}
+					if (xmlHttp.status == 200) {
+						var header = xmlHttp.getResponseHeader('Content-Type'),
+							delimited = header.split(';')[0].split('/'),
+							contentType = delimited[0],
+							outputFormat = delimited[1],
+							response = xmlHttp.response,
+							convertName = contentType + ' ' + ((settings.dataType) ? settings.dataType : outputFormat),
+							modifiedCheck = {};
+
+						// settings.ifModified
+						if (settings.ifModified) {
+							modifiedCheck.etag = xmlHttp.getResponseHeader('ETag');
+							modifiedCheck.lastModified = xmlHttp.getResponseHeader('Last-Modified');
+							if (ajaxSettings.cached[url]) {
+								if (ajaxSettings.cached[url].lastModified != modifiedCheck.lastModified || (modifiedCheck.etag && ajaxSettings.cached[url].eTag == modifiedCheck.etag)) {
+									ajaxSettings.cached[url] = modifiedCheck;
+								} else {
+									action.reject({
+										status: 304,
+										text: 'Not modified'
+									});
+									callComplete();
+									return;
+								}
+							}
+						}
+
+						// settings.afterDataReceive
+						if (fn.isCallable(settings.afterDataReceive)) {
+							response = settings.afterDataReceive.call(response, response);
+						}
+
+						if (converters[convertName]) {
+							if (converters[convertName] !== true) {
+								response = converters[convertName](response);
+							}
+						}
+						action.resume(response);
+						callComplete();
+					} else {
+						action.reject({
+							status: xmlHttp.status,
+							text: xmlHttp.statusText
+						});
+						callComplete();
+					}
+				};
+
+				xmlHttp.send(settings.data);
+			}
+		});
+		return (settings.context) ? thread.resolveWith(settings.context) : thread.resolve();
+	};
 
 	// Get Event Object
-	function getEventObject(element, event, namespace) {
+	function getEventObject(element, event) {
 		var evtobj;
-		if (Event) {
-			var evtobj = new Event(event, {
-	            'bubbles'    : true, // Whether the event will bubble up through the DOM or not
-	            'cancelable' : true  // Whether the event may be canceled or not
-	        });
+		if (CustomEvent) {
+			evtobj = new CustomEvent(event, {
+				'bubbles': true,
+				// Whether the event will bubble up through the DOM or not
+				'cancelable': true // Whether the event may be canceled or not
+			});
 		} else if (doc.createEvent) {
-			if (/(mouse.+)|((un)?click)/i.test(event)) {
+			if (/(mouse.+)|(((un)?click)|over|down|up)/i.test(event)) {
 				evtobj = doc.createEvent('MouseEvents');
 			} else {
 				evtobj = doc.createEvent('HTMLEvents');
@@ -1244,674 +2473,593 @@
 		} else if (element.createEventObject) {
 			evtobj = element.createEventObject();
 		}
-		evtobj.namespace = namespace;
-
 		return evtobj;
 	}
 
-	// Jet Live Event Handler
-	jLiveEvent = function (elem) {
-		var events = {},
-			liveBinded = {},
-			element = elem,
-			self = {
-				register: function (selector, event, callback) {
-					event = event.toLowerCase();
-					selector = trim(selector);
-					if (!core.isDefined(events[event])) {
-						events[event] = {};
-					}
-					events[event][selector] = callback;
-				
-					if (!core.isDefined(liveBinded[event])) {
-						liveBinded[event] = true;
-
-						// Bind OnLive event to document
-						jet(element).bind(event, function (e) {
-							var evt = e || window.event, elem = evt.target || evt.srcElement;
-							each(events[event], function (selector, callback) {
-								if (!core.isDefined(elem.bindMap)) {
-									elem.bindMap = {};
-								}
-								if (!core.isDefined(elem.bindMap[event])) {
-									elem.bindMap[event] = {};
-								}
-								if (!core.isDefined(elem.bindMap[event][selector])) {
-									var el = jet(elem), e;
-
-									elem.bindMap[event][selector] = true;
-									if (el.is(selector)) {
-										if (evt = regex.eventname.exec(event)) {
-											jet(elem).bind(event, callback);
-
-											evt[1] = evt[1].toLowerCase();
-											e = getEventObject(this, evt[1], evt[2]);
-
-											callback.call(elem, e);
-										}
-									}
-								}
-							});
-						});
-					}
-
-					return this;
-				},
-				detach: function (event, selector) {
-					var evt = regex.eventname.exec(event);
-					evt[1] = trim(evt[1].toLowerCase());
-
-					each(events, function (eventName, i) {
-						var evtIn = regex.eventname.exec(eventName);
-						evtIn[1] = trim(evtIn[1].toLowerCase());
-
-						if (evt[1] == '' || evtIn[1] == evt[1]) {
-							each(this, function (sel, event) {
-								if (!core.isDefined(selector) || selector == sel) {
-									jet(element).find(sel).unbind(eventName).each(function () {
-										if (core.isDefined(this.bindMap) && core.isDefined(this.bindMap[eventName]) && core.isDefined(this.bindMap[eventName][sel])) {
-											delete this.bindMap[eventName][sel];
-										}
-									});
-									delete events[eventName][sel];
-								}
-							});
-						}
-					});
-					
-					if (!core.isDefined(selector)) {
-						jet(element).unbind(event);
-					}
-
-					return this;
-				}
-			};
-		return self;
-	}
-
-	function getNativeEvent(element, evt) {
-		if (element[evt]) {
-			return element[evt];
-		} else if (element['on' + evt]) {
-			return element['on' + evt];
-		}
-		return null;
-	}
-
-	// Jet Element Event Handler
-	function jEvent(element, evt) {
-		var events = {},
-			nativeEvent = null,
-			self = {
-				element: null,
-				add: function(namespace, callback) {
-					if (!namespace) namespace = '__default';
-					if (core.isEmpty(events)) {
-						nativeEvent = getNativeEvent(element, evt);
-					}
-					events['__default'] = callback;
-
-					if (!core.isDefined(events[namespace])) {
-						events[namespace] = function () {};
-					}
-					events[namespace] = callback;
-					return this;
-				},
-				remove: function(namespace) {
-					if (!namespace) namespace = '__default';
-					delete events[namespace];
-					return this;
-				},
-				clear: function() {
-					events = {};
-					return this;
-				},
-				isEmpty: function() {
-					return jet.isEmpty(events);
-				},
-				getHandler: function() {
-					return function(e) {
-						var index;
-						// Fixed below IE8
-						e = e || win.event;
-						(function (evt) {
-							self.trigger = function () {
-								return nativeEvent.call(element, evt);
-							}
-						})(e);
-						e.nativeEvent = self.trigger;
-
-						// If trigger with namespace, call the specify event handler
-						if (core.isDefined(e.namespace) && e.namespace) {
-							if (core.isDefined(events[e.namespace])) {
-								return events[e.namespace].call(element, e);
-							}
-						} else {
-							// If trigger without namespace, execute default handler
-							if (events['__default']) return events['__default'].call(element, e);
-						}
-					};
-				}
-			};
-		self.element = element;
-		return self;
-	}
-	// jetObject Prototype
-	jetObject.prototype = [];
-	extend(jetObject.prototype, {
-		constructor: jetObject,
-		selector: '',
-		// - .merge(object)
-		// Merge a set of elements into current set of matched elements that not be added or duplicate.
-		// @param {Object} object The array or array-like object that will be merged.
-		// @return {jetObject}
-		// - 
-		merge: function(object) {
-			var self = this;
-			each(this, function() {
-				this.add = true;
-			});
-			if (core.isCollection(object)) {
-				each(object, function() {
-					if (core.isElement(this) && !this.added) {
-						this.added = true;
-						self.push(this);
+	/**
+	 * Merge the contents of two or more objects together into the first object.
+	 * @name       extend
+	 *
+	 * @param      {*}         object        The object you need to identify
+	 *                                       for.
+	 * @param      {...Mixed}  extendObject  Additional objects containing
+	 *                                       properties to merge in.
+	 * @return     {Jet}       { description_of_the_return_value }
+	 */
+	fn.extend = function(object, extendObject) {
+		var args = slice.call(arguments);
+		args.shift();
+		fn.each(args, function() {
+			if (typeof this == 'object' && this !== null) {
+				fn.each(this, function(key, val) {
+					if (typeof object[key] == 'undefined') {
+						object[key] = val;
 					}
 				});
-				reset(this);
+			}
+		});
+		return this;
+	};
+
+	/**
+	 * Merge the contents or Hook the plugins into the JetObject Prototype.
+	 * @namespace  {Jet}
+	 * @name       hook
+	 *
+	 * @param      {...Mixed}   object  - Additional objects containing
+	 *                                  properties to merge in.
+	 * @return     {Jet}  { description_of_the_return_value }
+	 */
+	fn.hook = function(object) {
+		fn.each(arguments, function() {
+			fn.each(this, function(key, val) {
+				if (typeof JetObject.prototype[key] == 'undefined') {
+					JetObject.prototype[key] = val;
+				}
+			});
+		});
+		return this;
+	};
+
+	fn.extend(Jet, fn);
+
+	/** @namespace JetObject */
+	fn.hook({
+		/**
+		 * Iterate over a Jet object, executing a function for each matched
+		 * element.
+		 *
+		 * @param      {Function}   callback  A function to execute for each
+		 *                                    matched element.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		each: function(callback) {
+			fn.each(this, callback);
+			return this;
+		},
+		/**
+		 * Get the value of a computed style property for the first element in
+		 * the set of matched elements or set one or more CSS properties for
+		 * every matched element.
+		 *
+		 * @param      {String}            css     A CSS property or an array of
+		 *                                         one or more CSS properties.
+		 * @param      {object|callback}   value   A value to set for the
+		 *                                         property or a function
+		 *                                         returning the value to set.
+		 *                                         this is the current element.
+		 *                                         Receives the index position
+		 *                                         of the element in the set and
+		 *                                         the old value as arguments.
+		 * @return     {JetObject|string}  { description_of_the_return_value }
+		 */
+		css: function(css, value) {
+			var elem, cc, owner, self = this, cssObj = {};
+			if (fn.isPlainObject(css)) {
+				// If the css is An array of CSS properties, iterate and execute one by one
+				fn.each(css, function(style, val) {
+					self.css(style, val);
+				});
+			} else if (fn.isIterator(css)) {
+				fn.each(css, function() {
+					cssObj[this] = self.css(this);
+				});
+				return cssObj;
+			} else {
+				// Cover to camcel case
+				cc = fn.camelCase(css);
+				// If the value is defined,
+				if (fn.isDefined(value)) {
+					fn.each(this, function(i) {
+						if (fn.isDefined(this.style[cc])) {
+							this.style[cc] = (fn.isCallable(value)) ? value.call(this, i, this.style[cc]) : value;
+						}
+					});
+				} else {
+					if (fn.isDefined(this[0])) {
+						elem = this[0];
+						owner = fn.owner(elem).document;
+						if (owner.defaultView && owner.defaultView.getComputedStyle) {
+							return owner.defaultView.getComputedStyle(elem, '').getPropertyValue(css);
+						} else if (elem.currentStyle) {
+							return elem.currentStyle[cc];
+						}
+						return elem.style[cc];
+					}
+					return null;
+				}
 			}
 			return this;
 		},
-		// - .each(callback)
-		// Iterate over a jet object, executing a function for each matched element.
-		// @param {Function} callback The callback function that to be executed.
-		// @return {jetObject}
-		// - 
-		each: function(callback) {
-			each(this, callback);
+		/**
+		 * Removes a css style.
+		 *
+		 * @param      {String}  css     The css name to remove
+		 * @return     {Object}  { description_of_the_return_value }
+		 */
+		removeCss: function(css) {
+			if (fn.isString(css)) {
+				fn.each(this, function() {
+					var elem = this, csslist = css.split(' ');
+					fn.each(csslist, function() {
+						var cc = fn.camelCase(this);
+						if (fn.isDefined(elem.style[cc])) {
+							elem.style[cc] = '';
+						}
+					});
+				});
+			}
 			return this;
 		},
-		// - .find(selector)
-		// Get the descendants of each element in the current set of matched elements, filtered by a selector, jet object, array, array-like object, or element.
-		// @param {String} selector The string of selector.
-		// @param {Object} selector The jet object, array, array-like object that for filtering.
-		// @param {DOMElement} selector The element that for filtering.
-		// @return {jetObject}
-		// - 
-		find: function(selector) {
-			var object;
-			if (core.isString(selector)) {
-				return querySelector(selector, this, new jetObject());
+
+		/**
+		 * Determines if the class name is exists.
+		 *
+		 * @param      {String}   classname  The class name
+		 * @return     {boolean}  True if has class exists, False otherwise.
+		 */
+		hasClass: function(classname) {
+			var found = false;
+			if (fn.isString(classname)) {
+				fn.each(this, function() {
+					if (!found) {
+						var classes = ' ' + this.className + ' ';
+						if (classes.indexOf(' ' + classname + ' ') >= 0) {
+							found = true;
+						}
+					}
+				});
+			}
+			return found;
+		},
+
+		/**
+		 * Add or remove one or more classes from each element in the set of
+		 * matched elements, depending on either the class’s presence or the
+		 * value of the state argument.
+		 *
+		 * @param      {String}  classname    One or more class names (separated by spaces) to be toggled for each element in the matched set.
+		 * @param      {boolean}  addorremove  A Boolean (not just truthy/falsy) value to determine whether the class should be added or removed.
+		 * @return     {Object}  { description_of_the_return_value }
+		 */
+		toggleClass: function(classname, addorremove) {
+			fn.each(this, function(i, elem) {
+				classname = (fn.isCallable(classname)) ? classname.call(this.className, i, this.className) : classname;
+				if ((fn.isDefined(addorremove) && addorremove) || (!fn.isDefined(addorremove) && !Jet(elem).hasClass(classname))) {
+					Jet(elem).addClass(classname);
+				} else {
+					Jet(elem).removeClass(classname);
+				}
+				if (!elem.className) {
+					elem.removeAttribute('class');
+				}
+			});
+			return this;
+		},
+
+		/**
+		 * Get the HTML contents of the first element in the set of matched
+		 * elements or set the HTML contents of every matched element.
+		 *
+		 * @param      {String}  html    A string of HTML to set as the content
+		 *                               of each matched element.
+		 * @param      {function}  html    A function returning the HTML content to set.
+		 *                                 Receives the index position of the element in
+		 *                                 the set and the old HTML value as arguments.
+		 * @return     {Object}  { description_of_the_return_value }
+		 */
+		html: function(html) {
+			if (fn.isDefined(html)) {
+				fn.each(this, function(i) {
+					this.innerHTML = (fn.isCallable(html)) ? html.call(this.innerHTML, i, this.innerHTML) : html;
+				});
+				return this;
 			} else {
-				object = new jetObject();
-				(function process(element) {
-					if (core.isCollection(element)) {
-						each(element, function() {
-							process(this);
+				return (this[0]) ? this[0].innerHTML : '';
+			}
+		},
+		/**
+		 * Encode a set of form elements as a string for submission.
+		 *
+		 * @return     {String}  { description_of_the_return_value }
+		 */
+		serialize: function() {
+			var result = [], elem = this[0], formData;
+			if (elem && elem.tagName.toLowerCase() == 'form') {
+				formData = new FormData(elem);
+				fn.each(formData, function(key, value) {
+					result.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
+				});
+			}
+			return result.join('&');
+		},
+		/**
+		 * Encode a set of form elements as an array of names and values.
+		 *
+		 * @return     {Array}  { description_of_the_return_value }
+		 */
+		serializeArray: function() {
+			var result = [], elem = this[0], formData;
+			if (elem && elem.tagName.toLowerCase() == 'form') {
+				formData = new FormData(elem);
+				fn.each(formData, function(key, value) {
+					result.push({
+						name: encodeURIComponent(key),
+						value: encodeURIComponent(value)
+					});
+				});
+			}
+			return result;
+		},
+		/**
+		 * Select the first matched DOM element.
+		 *
+		 * @returns {JetObject}
+		 */
+		first: function() {
+			if (this.length === 0) return this;
+			return Jet(this[0]);
+		},
+		/**
+		 * Select the last matched DOM element.
+		 *
+		 * @returns {JetObject}
+		 */
+		last: function() {
+			if (this.length === 0) return this;
+			return Jet(this[this.length - 1]);
+		},
+		/**
+		 * Check the current matched set of elements against a selector, element
+		 * and return true if at least one of these elements matches the given
+		 * arguments.
+		 *
+		 * @param      {*}        selector  A selector string to search another
+		 *                                  matched elements for identitfy.
+		 * @return     {boolean}  { description_of_the_return_value }
+		 */
+		is: function(selector) {
+			var found = false;
+			if (fn.isString(selector)) {
+				fn.each(this, function(key, elem) {
+					if (!found) {
+						fn.each(Jet(selector), function() {
+							if (this == elem) {
+								found = true;
+							}
 						});
-					} else if (core.isElement(element)) {
-						each(this, function() {
-							if (!element.added && core.comparePosition(this, element) === 20) {
-								object.push(element);
-								element.added = true;
+					}
+				});
+			} else if (fn.isCallable(selector)) {
+				fn.each(this, function(key, elem) {
+					if (!found) {
+						found = selector.call(this);
+					}
+				});
+			} else if (fn.isIterator(selector)) {
+				fn.each(this, function(key, elem) {
+					if (!found) {
+						fn.each(selector, function() {
+							if (this == elem) {
+								found = true;
+							}
+						});
+					}
+				});
+			}
+			return found;
+		},
+		/**
+		 * Execute all handlers and behaviors attached to the matched elements for the given event type.
+		 *
+		 * @param      {String}  event   Event name to fire
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		trigger: function(event) {
+			if (event && /^[\w-.]+$/.test(event)) {
+				var namespaces = event.split('.'),
+					eventName = namespaces.shift().toLowerCase();
+
+				fn.each(this, function(i, elem) {
+					var evt = getEventObject(this, eventName);
+					evt.namespaces = namespaces;
+
+					if (document.createEvent) {
+						elem.dispatchEvent(evt);
+					} else {
+						elem.fireEvent('on' + eventName, evt);
+					}
+				});
+			}
+			return this;
+		},
+		/**
+		 * Attach an event handler function for one or more events to the
+		 * selected elements.
+		 *
+		 * @param      {String}     event     Event name with optional
+		 *                                    namespace.
+		 * @param      {String}     selector  A selector string to filter the
+		 *                                    descendants of the selected
+		 *                                    elements that trigger the event.
+		 * @param      {Function}   callback  An event handler.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		on: function(event, selector, callback) {
+			var elements = this;
+			event = event.split(' ');
+			fn.each(event, function() {
+				if (/^[\w-.]+$/.test(this)) {
+					var namespaces = this.split('.'),
+						eventName = namespaces.shift().toLowerCase();
+
+					if (fn.isCallable(selector)) {
+						callback = selector;
+						selector = '';
+					} else if (!fn.isString(selector)) {
+						selector = '';
+					}
+					if (fn.isCallable(callback)) {
+						fn.each(elements, function() {
+							if (!fn.isDefined(this.events)) {
+								this.events = {};
+							}
+							if (!fn.isDefined(this.events[eventName])) {
+								// Event Level
+								(function(elem) {
+									var storage = [],
+										runEvent = function(e) {
+											if (this.selector) {
+												if (!Jet(e.target).is(this.selector)) {
+													return;
+												}
+											}
+											this.callback.call(this.selector ? e.target : elem, e);
+										};
+									elem.events[eventName] = {
+										add: function(namespaces, selector, callback) {
+											if (namespaces.length === 0) {
+												namespaces.push(null);
+											}
+											fn.each(namespaces, function() {
+												storage.push({
+													namespace: this,
+													selector: selector,
+													callback: callback
+												});
+											});
+										},
+										remove: function(namespace) {
+											if (!namespace) {
+												storage = [];
+											} else {
+												fn.each(storage, function(key) {
+													if (namespace == '**' && !this.namespace || this.namespace == namespace) {
+														delete storage[key];
+													}
+												});
+											}
+										},
+										trigger: function(e) {
+											fn.each(storage, function(key, val) {
+												if (!e.namespaces || (e.namespaces.length === 0 || e.namespaces.indexOf(this.namespace) >= 0)) {
+													runEvent.call(this, e);
+												}
+											});
+										}
+									};
+									elem.events[eventName].default = elem[eventName];
+									(function(evt) {
+										elem[evt] = function(e) {
+											elem.events[evt].trigger.call(this, e);
+										};
+										if (/^(DOMContentLoaded|(on)?load)$/i.test(eventName) && (fn.isDocument(elem) || fn.isWindow(elem))) {
+											fn.ready(callback);
+										} else {
+											if (elem.addEventListener) {
+												elem.addEventListener(evt, elem[evt], false);
+											} else if (this.attachEvent) {
+												elem.attachEvent(eventBindmap[evt] || 'on' + evt, elem[evt]);
+											} else {
+												elem[eventBindmap[evt] || 'on' + evt] = elem[evt];
+											}
+										}
+									})(eventName);
+								})(this);
+							}
+							this.events[eventName].add(namespaces, selector, callback);
+						});
+					}
+				}
+			});
+			return this;
+		},
+
+		/**
+		 * Remove an event handler.
+		 *
+		 * @param      {String}  event     The event name
+		 * @param      {String}  selector  The selector which has defined
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		off: function(event, selector) {
+			var matches;
+			if (!!(matches = /^([\w-]+)(?:\.([\w-]+|\*\*))?$/.exec(event))) {
+				fn.each(this, function() {
+					if (this.events && this.events[matches[1]]) {
+						if (this.events[matches[1]]) {
+							this.events[matches[1]].remove(matches[2]);
+						}
+					}
+				});
+			}
+			return this;
+		},
+		/**
+		 * Get the descendants of each element in the current set of matched
+		 * elements, filtered by a selector, or element.
+		 *
+		 * @param      {mixed}      selector  A string containing a selector
+		 *                                    expression, an element or an
+		 *                                    iterate object to match elements
+		 *                                    against.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		find: function(selector) {
+			var JetObj = new JetObject(),
+				elems = this;
+			if (fn.isString(selector)) {
+				fn.each(this, function() {
+					fn.each(this.querySelectorAll(selector), function() {
+						if (!this._added) {
+							this._added = true;
+							JetObj.push(this);
+						}
+					});
+				});
+			} else {
+				(function run(element) {
+					if (fn.isIterator(element)) {
+						fn.each(element, function() {
+							run(this);
+						});
+					} else if (fn.isDOMElement(element)) {
+						fn.each(elems, function() {
+							if (!this._added && fn.comparePosition(this, element) === 20) {
+								this.added = true;
+								JetObj.push(element);
 							}
 						});
 					}
 				})(selector);
-				reset(object);
-				return object;
 			}
-		},
-		// Animation Action
-		// - .hide(duration, callback)
-		// Hide the matched elements.
-		// @param {Number} duration The number of duration in millisecond.
-		// @param {Function} callback The callback function that will be executed when the element has been hidden.
-		// @return {jetObject}
-		// - 
-		hide: function(duration, callback) {
-			each(this, function(i, elem) {
-				var values = {},
-					jetObj = jet(elem);
-				if (jetObj.css('display') !== 'none') {
-					duration = parseInt(duration);
-					if (duration > 0) {
-						elem._cssStorage = {};
-						each({
-							width: true,
-							height: true,
-							padding: true,
-							margin: true,
-							opacity: true,
-							display: false,
-							overflow: false
-						}, function(css, isValue) {
-							var val = jetObj.css(css);
-							if (parseFloat(val) > 0) {
-								elem._cssStorage[css] = val;
-							}
-							if (isValue) values[css] = '0';
-						});
-						jetObj.css({
-							display: 'block',
-							overflow: 'hidden'
-						});
-						if (!core.isEmpty(values)) {
-							jetObj.animate(values, duration, 'swing', {
-								complete: function() {
-									jetObj.css('display', 'none');
-									if (core.isFunction(callback)) {
-										callback.call(elem);
-									}
-								}
-							});
-						}
-					} else {
-						jetObj.css('display', 'none');
-						if (core.isFunction(callback)) {
-							callback.call(elem);
-						}
-					}
-				}
+			fn.each(JetObj, function() {
+				delete this._added;
 			});
-			return this;
+			return JetObj;
 		},
-		// - .show(duration, callback)
-		// Show the matched elements.
-		// @param {Number} duration The number of duration in millisecond.
-		// @param {Function} callback The callback function that will be executed when the element has been shown.
-		// @return {jetObject}
-		// - 
-		show: function(duration, callback) {
-			each(this, function(i, elem) {
-				var values = {},
-					jetObj = jet(elem),
-					style;
-				if (jetObj.css('display') === 'none') {
-					duration = parseInt(duration);
-					if (duration > 0) {
-						if (core.isDefined(elem._cssStorage)) {
-							each({
-								width: true,
-								height: true,
-								padding: true,
-								margin: true,
-								opacity: true,
-								display: false,
-								overflow: false
-							}, function(css, isValue) {
-								if (isValue) {
-									values[css] = elem._cssStorage[css];
-								} else {
-									jetObj.css(name, jetObj.css(css));
-								}
-							});
-							elem._cssStorage = null;
-						} else {
-							style = core.defaultStyle(core.nodeName(elem));
-							jetObj.css({
-								display: style.display,
-								overflow: style.overflow,
-								opacity: 0
-							});
-							values = {
-								opacity: 1
-							};
-						}
-						if (!core.isEmpty(values)) {
-							jetObj.animate(animateObj, duration, 'onswing', {
-								complete: function() {
-									if (core.isFunction(callback)) {
-										callback.call(elem);
-									}
-								}
-							});
-						}
-					} else {
-						jetObj.css('display', 'block');
-						if (core.isFunction(callback)) {
-							callback.call(this);
-						}
-					}
-				}
-			});
-			return this;
-		},
-		// - .get(start[, length])
-		// Returns the specified element or a number of elements with jet object.
-		// @param {Number} start The returned element will start at the specified index in the set of matched elements.
-		// @param {Number} length Returnes a number of elements from the specified index.
-		// @return {jetObject}
-		// - 
-		get: function(start, length) {
-			if (core.isNumeric(start) && this[start]) {
-				if (core.isNumeric(length)) {
-					length = (this.length <= start + length) ? this.length : start + length;
-					if (length - start > 1) {
-						return jet(this.slice(start, length));
-					} else {
-						return jet(this[start]);
-					}
-				} else {
-					return jet(this[start]);
-				}
-			}
-			return new jetObject();
-		},
-		// - .filter(callback)
-		// Reduce the set of matched elements to those that match the selector or pass the function’s test.
-		// @param {Function} callback The callback function that used of filter, return true to keep the element.
-		// @return {jetObject}
-		// - 
-		filter: function(callback) {
-			var jetObj = new jetObject();
-			each(this, function() {
-				if (callback.call(this)) {
-					jetObj.push(this);
-				}
-			});
-			return jetObj;
-		},
-		// - .walk(callback)
-		// Execute the user-defined callback function to each element of the set of matched elements.
-		// @param {Function} callback The callback function thet will be executed.
-		// @return {jetObject}
-		// - 
-		walk: function(callback) {
-			var result = [];
-			each(this, function(i, object) {
-				var value = callback.call(object, i, object);
-				if (core.isArray(value)) {
-					result = result.concat(value);
-				} else {
-					result.push(value);
-				}
-			});
-			return result;
-		},
-		// Event
-		// - .on(event[, selector, callback])
-		// Setup the live event with specify selector.
-		// @param {String} event The string of event name.
-		// @param {String} selector The string of the selector.
-		// @param {Function} selector Alias to callback
-		// @param {Function} callback The callback function thet will be applied to specified event.
-		// @return {jetObject}
-		// - 
-		on: function(event, selector, callback) {
-			if (core.isDefined(event) && event) {
-				if (core.isFunction(selector))  {
-					if (!core.isDefined(document.jLiveEvent)) {
-						document.body.jLiveEvent = jLiveEvent(document.body);
-					}
-					document.body.jLiveEvent.register(this.selector, event, selector);
-				} else {
-					if (core.isString(selector)) {
-						each(this, function() {
-							if (!core.isDefined(this.jLiveEvent)) {
-								this.jLiveEvent = jLiveEvent(this);
-							}
-							this.jLiveEvent.register(selector, event, callback);
-						});
-					}
-				}
-			}
-			return this;
-		},
-		// Event
-		// - .off(event, selector)
-		// Cancel live event with specify selector.
-		// @param {String} event The string of event name.
-		// @param {String} selector The string of the selector.
-		// @return {jetObject}
-		// - 
-		off: function (event, selector) {
-			if (core.isDefined(event) && event) {
-				each((!core.isDefined(selector)) ? [document.body] : this, function() {
-					if (core.isDefined(this.jLiveEvent)) {
-						this.jLiveEvent.detach(event, selector);
-					}
-				});
-			}
-		},
-		// - .bind(event, callback)
-		// Bind the callback function to specifed event in every matched element.
-		// @param {String} event The name of the event.
-		// @param {Function} callback The callback function that will be applied.
-		// @return {jetObject}
-		// - 
-		bind: function(event, callback) {
-			var evt;
-			event = trim(event);
-			if (evt = regex.eventname.exec(event)) {
-				each(this, function() {
-					if (/^(DOMContentLoaded|(on)?load)$/i.test(evt[1]) && (this == doc || this == win)) {
-						core.ready(callback);
-					} else {
-						evt[1] = evt[1].toLowerCase();
-						if (core.isElement(this) || core.isWindow(this)) {
-							this.jEvent = this.jEvent || {};
-							if (!this.jEvent[evt[1]]) {
-								this.jEvent[evt[1]] = jEvent(this, evt[1]);
-								if (this.addEventListener) {
-									this.addEventListener(evt[1], this.jEvent[evt[1]].getHandler(), false);
-								} else if (this.attachEvent) {
-									this.attachEvent(bindmap[evt[1]] || 'on' + evt[1], this.jEvent[evt[1]].getHandler());
-								} else {
-									this[bindmap[evt[1]] || 'on' + evt[1]] = this.jEvent[evt[1]].getHandler();
-								}
-							}
-							this.jEvent[evt[1]].add(evt[2], callback);
-						}
-					}
-				});
-			}
-			return this;
-		},
-		// - .unbind(event)
-		// Unbind the specifed event in every matched element.
-		// @param {String} event The name of the event to unbind.
-		// @return {jetObject}
-		// - 
-		unbind: function(event) {
-			var evt;
-			event = trim(event);
 
-			if (evt = regex.eventname.exec(event)) {
-				each(this, function() {
-					if (core.isElement(this) || core.isWindow(this)) {
-						if (this.jEvent && this.jEvent[evt[1]]) {
-							this.jEvent[evt[1]].remove(evt[2]);
-							if (this.jEvent[evt[1]].isEmpty()) {
-								if (this.removeEventListener) {
-									this.removeEventListener(evt[1], this.jEvent[evt[1]].getHandler(), false);
-								} else if (this.detachevent) {
-									this.detachevent(bindmap[evt[1]] || 'on' + evt[1], this.jEvent[evt[1]].getHandler());
-								} else {
-									this[bindmap[evt[1]] || 'on' + evt[1]] = null;
-								}
-								delete this.jEvent[evt[1]];
-							}
-						}
-					}
+		/**
+		 * Get the children of each element in the set of matched elements,
+		 * optionally filtered by a selector.
+		 *
+		 * @param      {String}     selector  A string containing a selector
+		 *                                    expression to match elements
+		 *                                    against.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		children: function(selector) {
+			var JetObj = new JetObject();
+			fn.each(this, function() {
+				fn.each(this.children, function() {
+					JetObj.push(this);
 				});
-			}
-			return this;
-		},
-		// - .trigger(event)
-		// Fire the specifed event in every matched element.
-		// @param {String} event The name of the event to fire.
-		// @return {jetObject}
-		// - 
-		trigger: function(event) {
-			var e, evt;
-			each(this, function() {
-				if (evt = regex.eventname.exec(event)) {
-					evt[1] = evt[1].toLowerCase();
-					var e = getEventObject(this, evt[1], evt[2]);
-
-					if (this.dispatchEvent) {
-						this.dispatchEvent(e);
-					} else if (this.fireEvent) {
-						this.fireEvent(bindmap[event] || 'on' + event, e);
-					} else if (this[event]) {
-						this[event](e);
-					} else if (this['on' + event]) {
-						this['on' + event](e);
-					}
-				}
 			});
-			return this;
+			return JetObj;
 		},
-		// - .is(selector)
-		// Check the current matched set of elements against a selector, element, or jet object . Return true if at least one of these elements matched.
-		// @param {String} selector The string of selector.
-		// @param {Object} selector The jet object, array, array-like object that for filtering.
-		// @param {Function} selector The callback function that execute for every matched elements.
-		// @return {Boolean}
-		// - 
-		is: function(selector) {
-			var index = 0,
-				length = this.length,
-				self = this;
 
-			function process(item) {
-				if (core.isCollection(item)) {
-					for (; index < length; index++) {
-						if (!process(this[index])) {
-							return false;
-						}
-					}
-				} else if (core.isFunction(item)) {
-					for (; index < length; index++) {
-						if (!item.call(this[index])) {
-							return false;
-						}
-					}
-				} else if (core.isString(item)) {
-					return !!jet(item).filter(function() {
-						if (core.inArray(self, this)) {
-							return true;
-						}
-						return false;
-					}).length;
-				}
-				return true;
-			}
-			return process(selector);
-		},
-		// - .value(value)
-		// Get the current value of the first element in the set of matched elements or set the value of every matched element.
-		// @param {String} selector The value to set.
-		// @param {Function} selector A function returning the value to set.
-		// @return {jetObject|String}
-		// - 
-		value: function(value) {
-			var self = this,
-				elem;
-			if (core.isDefined(value)) {
-				each(this, function() {
-					var setValue, hook;
-					hook = jHooks.value[this.type] || jHooks.value[core.nodeName(this)];
-					if (hook) {
-						hook.call(self, this, value);
-					} else {
-						if (core.isDefined(this.value)) {
-							setValue = (core.isFunction(value)) ? value.call(this.value) : value;
-							this.value = setValue;
-							jet(this).attr('value', setValue);
-						}
-					}
-				});
-				return this;
-			} else {
-				elem = this[0];
-				if (core.isElement(elem)) {
-					hook = jHooks.value[elem.type] || jHooks.value[core.nodeName(elem)];
-					if (hook) {
-						return hook.call(self, elem);
-					}
-					return elem.value;
-				}
-				return '';
-			}
-		},
-		// - .text(value)
-		// Get the current text (innerText) of the first element in the set of matched elements or set the value of every matched element.
-		// @param {String} selector The string of content to set.
-		// @param {Function} selector A function returning the value to set.
-		// @return {jetObject|String}
-		// - 
+		/**
+		 * Get the combined text contents of each element in the set of matched
+		 * elements, including their descendants, or set the text contents of
+		 * the matched elements.
+		 *
+		 * @param      {String}           value   The text to set as the content
+		 *                                        of each matched element. When
+		 *                                        Number or Boolean is supplied,
+		 *                                        it will be converted to a
+		 *                                        String representation.
+		 * @param      {Function}  value   A function returning the text content to set.
+		 *                                 Receives the index position of the element in
+		 *                                 the set and the old text value as arguments.
+		 * @return     {string|JetObject}  { description_of_the_return_value }
+		 */
 		text: function(value) {
-			if (core.isDefined(value)) {
-				each(this, function() {
-					this.innerText = (core.isFunction(value)) ? value.call(this.innerText) : value;
+			if (fn.isDefined(value)) {
+				fn.each(this, function() {
+					this.innerText = (fn.isCallable(value)) ? value.call(this.innerText) : value;
 				});
 				return this;
 			} else {
-				var elem = this[0];
-				if (core.isElement(elem)) {
-					if (core.isDefined(elem.type) && elem.type.indexOf('select') !== -1) {
-						return elem.options[elem.selectedIndex].innerHTML;
+				if (this.length) {
+					if (fn.isDefined(this[0].type) && this[0].type.indexOf('select') !== -1) {
+						return this[0].options[this[0].selectedIndex].innerHTML;
 					}
-					return elem.innerText;
+					return this[0].innerText;
 				}
 				return '';
 			}
 		},
-		// - .detach()
-		// Remove the set of matched elements from the DOM.
-		// @return {jetObject}
-		// - 
+
+		/**
+		 * Remove the set of matched elements from the DOM.
+		 *
+		 * @return     {Object}  { description_of_the_return_value }
+		 */
 		detach: function() {
-			each(this, function() {
+			fn.each(this, function() {
 				if (this.parentNode) {
 					this.parentNode.removeChild(this);
 				}
 			});
 			return this;
 		},
-		// - .isActive()
-		// Check the first element of the set of matched elements is active (focus) in current document.
-		// @return {Boolean}
-		// - 
+
+		/**
+		 * Determines if the matched elements is active (focus).
+		 *
+		 * @return     {boolean}  True if active, False otherwise.
+		 */
 		isActive: function() {
-			var elem = this[0];
-			if (!elem || !core.isElement(elem)) return false;
-			if (doc.activeElement === elem) {
-				return true;
+			if (this.length) {
+				if (doc.activeElement === this[0]) {
+					return true;
+				}
 			}
 			return false;
 		},
-		// - .getUnit(prop)
-		// Get the CSS value in jUnit object from the first element's position of the set of matched elements.
-		// @param {String} property The name of style to get.
-		// @return {jUnit}
-		// - 
-		getUnit: function(property) {
-			var elem = this[0];
-			if (!elem || !core.isElement(elem)) return jUnit();
-			return jUnit(elem, property);
-		},
-		// - .offset()
-		// Get the first element's position of the set of matched elements.
-		// @param {String} prop The name of style to get.
-		// @return {PlainObject}
-		// - 
+
+		/**
+		 * Get the current coordinates of the first element,
+		 * or get the current coordinates from specified parent, default is body
+		 *
+		 *
+		 * @return     {Object}  { description_of_the_return_value }
+		 */
 		offset: function() {
 			var offset = {
-				top: 0,
-				left: 0
-			},
-				offsetParent, parentOffset = {
 					top: 0,
 					left: 0
 				},
-				elem = this[0];
-			if (core.isElement(elem)) {
-				offsetParent = this.offsetParent();
-				if (!core.nodeName(offsetParent, 'html')) {
-					parentOffset = offsetParent.offset();
+				parentOffset = {
+					top: 0,
+					left: 0
+				},
+				elem = this[0],
+				parent;
+			if (fn.isDOMElement(elem)) {
+				parent = this.offsetParent();
+				if (parent[0].nodeName.toLowerCase() != 'html') {
+					parentOffset = parent.offset();
 				}
 				parentOffset.top += parseInt(this.css('border-top-width'));
 				parentOffset.left += parseInt(this.css('border-left-width'));
@@ -1923,342 +3071,274 @@
 			}
 			return offset;
 		},
-		// - .offsetParent()
-		// Get the first element's parent offset of the first of matched elements.
-		// @return {jetObject}
-		// @added 1.0.6-Beta
-		// - 
+
+		/**
+		 * Get the closest ancestor element that is positioned.
+		 *
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
 		offsetParent: function() {
-			var elem = this[0],
-				offsetParent = (elem) ? elem.offsetParent : null;
+			var offsetParent = (this.length) ? this[0].offsetParent : null;
 			while (offsetParent) {
-				if (core.nodeName(offsetParent, 'html') || jet(offsetParent).css('position') !== 'static') {
+				if (offsetParent.nodeName.toLowerCase() != 'html' || Jet(offsetParent).css('position') !== 'static') {
 					break;
 				}
 				offsetParent = offsetParent.offsetParent;
 			}
-			return jet(offsetParent || docElem);
+			return Jet(offsetParent || docElem);
 		},
-		// - .boxRect()
-		// Get the first element's BoundingClientRect() of the set of matched elements, adjust the offset in IE.
-		// @return {PlainObject}
-		// @added 1.0.6-Beta
-		// - 
+
+		/**
+		 * Returns the size of matched element and its position relative to the viewport.
+		 *
+		 * @return     {PlainObject}  { description_of_the_return_value }
+		 */
 		boxRect: function() {
-			var rect, box, boxrect = {},
-				elem = this[0];
-			if (core.isElement(elem)) {
-				rect = elem.getBoundingClientRect();
-				if (!core.isIE) {
-					return rect;
-				}
-				if (core.isIE && boxAdjust === null) {
-					box = jet('<div style="position:absolute;top:0;left:0"></div>').appendTo('body');
-					boxAdjust = -box[0].getBoundingClientRect().top;
-					box.detach();
-					box = null;
-				}
-				return {
-					left: rect.left + boxAdjust,
-					right: rect.right + boxAdjust,
-					top: rect.top + boxAdjust,
-					bottom: rect.bottom + boxAdjust,
-					height: rect.right - rect.left,
-					width: rect.bottom - rect.top
+			var rect, boxrect = {}, margin, padding, border;
+			if (this.length) {
+				rect = this[0].getBoundingClientRect();
+				margin = this.margin();
+				padding = this.padding();
+				border = this.borderWidth();
+
+				boxrect = {
+					left: rect.left + margin.left,
+					right: rect.right + margin.right,
+					top: rect.top + margin.top,
+					bottom: rect.bottom + margin.bottom
 				};
+				boxrect.width = rect.right - rect.left;
+				boxrect.height = rect.bottom - rect.top;
+				return rect;
 			}
 			return null;
 		},
-		// - .inViewport(fullElementDisplay)
-		// Get the first element's is visble in viewport or not.
-		// @return {Boolean}
-		// @added 1.0.7-Beta
-		// - 
+
+		/**
+		 * Determines if the matched elements within the viewport
+		 *
+		 * @return     {boolean}  { description_of_the_return_value }
+		 */
 		inViewport: function() {
 			var boxRect = this.boxRect();
 			if (!boxRect) {
 				return false;
 			}
-
-		    return (
-				boxRect.top + boxRect.height >= 0 &&
-				boxRect.left + boxRect.width >= 0 &&
+			return (
+				boxRect.top + boxRect.height > 0 &&
+				boxRect.left + boxRect.width > 0 &&
 				boxRect.bottom <= (win.innerHeight || docElem.clientHeight) &&
 				boxRect.right <= (win.innerWidth || docElem.clientWidth)
-		    );
+			);
 		},
 
-		// - .height([value])
-		// Get the first element's height of the set of matched elements or set the height for every matched element.
-		// @param {Number} value The value of height to set.
-		// @return {jetObject|Number}
-		// - 
-		height: function(value) {
-			var body = doc.body,
-				elem = this[0];
-			if (core.isDefined(value)) {
-				each(this, function() {
-					var el, setValue;
-					if (core.isElement(this)) {
-						el = jet(this);
-						setValue = (core.isFunction(value)) ? value.call(this, el.css('height')) : value;
-						setValue += 'px';
-						el.css('height', setValue);
-					}
-				});
-				return this;
-			} else {
-				if (!core.isDefined(elem) || !core.isElement(elem)) {
-					return parseInt(win.innerHeight);
-				} else if (core.isDocument(elem)) {
-					return parseInt(docElem.clientHeight || jet('body').css('clientHeight'));
-				} else {
-					return parseInt(this.css('height'));
-				}
+		/**
+		 * Get the current computed inner height (including padding but not
+		 * border) for the first element in the set of matched elements or set
+		 * the inner height of every matched element.
+		 *
+		 * @param      {Number}     value   THe height including padding but not
+		 *                                  border
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		innerHeight: function(value) {
+			return getWidthHeight(this, 'height', ['padding-top', 'padding-bottom'], value);
+		},
+
+		/**
+		 * Get the current computed outer height (including padding, border, and
+		 * optionally margin) for the first element in the set of matched
+		 * elements or set the outer height of every matched element.
+		 *
+		 * @param      {Number}     value          THe height including padding,
+		 *                                         border, and optionally
+		 *                                         margin)
+		 * @param      {boolean}    includeMargin  A Boolean indicating whether
+		 *                                         to include the element's
+		 *                                         margin in the calculation.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		outerHeight: function(value, includeMargin) {
+			var list = ['padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width'];
+
+			if ((fn.isBoolean(value) && value) || includeMargin) {
+				list.push.apply(list, ['margin-top', 'margin-bottom']);
 			}
-		},
-		// - .innerHeight()
-		// Get the first element's height without border, padding and margin of the set of matched elements.
-		// @return {Number}
-		// - 
-		innerHeight: function() {
-			var value = 0,
-				self = this;
-			each(['padding-top', 'padding-bottom'], function() {
-				value += parseInt(self.css(this));
-			});
-			return parseInt(this.css('height')) - value;
-		},
-		// - .outerHeight(includeMargin)
-		// Get the first element's height with padding and border, even include the margin of the set of matched elements.
-		// @return {Number}
-		// - 
-		outerHeight: function(includeMargin) {
-			var value = 0,
-				self = this;
-			each(['padding-top', 'padding-bottom', 'border-top-width', 'border-bottom-width'], function() {
-				value += parseInt(self.css(this));
-			});
-			if (includeMargin) {
-				value += (parseInt(this.css('margin-top')) + parseInt(this.css('margin-bottom')));
+			if (fn.isBoolean(value) || !fn.isDefined(value)) {
+				value = undefined;
 			}
-			return parseInt(this.css('height')) + value;
+			return getWidthHeight(this, 'height', list, value);
 		},
-		// - .width([value])
-		// Get the first element's width of the set of matched elements or set the height for every matched element.
-		// @param {Number} value The value of width to set.
-		// @return {jetObject|Number}
-		// - 
-		width: function(value) {
-			var body = doc.body,
-				elem = this[0];
-			if (core.isDefined(value)) {
-				each(this, function() {
-					var el, setValue;
-					if (core.isElement(this)) {
-						el = jet(this);
-						setValue = (core.isFunction(value)) ? value.call(this, el.css('width')) : value;
-						setValue += 'px';
-						el.css('width', setValue);
-					}
-				});
-				return this;
-			} else {
-				if (!core.isDefined(elem) || !core.isElement(elem)) {
-					return parseInt(win.innerWidth);
-				} else if (core.isDocument(elem)) {
-					return parseInt(docElem.clientWidth || jet('body').css('clientWidth'));
-				} else {
-					return parseInt(this.css('width'));
-				}
+
+		/**
+		 * Get the current computed inner width (including padding but not
+		 * border) for the first element in the set of matched elements or set
+		 * the inner height of every matched element.
+		 *
+		 * @param      {Number}     value   The width including padding but not
+		 *                                  border
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		innerWidth: function(value) {
+			return getWidthHeight(this, 'width', ['padding-left', 'padding-right'], value);
+		},
+
+		/**
+		 * Get the current computed outer width (including padding, border, and
+		 * optionally margin) for the first element in the set of matched
+		 * elements or set the outer height of every matched element.
+		 *
+		 * @param      {Number}     value          The width including padding,
+		 *                                         border, and optionally
+		 *                                         margin)
+		 * @param      {boolean}    includeMargin  A Boolean indicating whether
+		 *                                         to include the element's
+		 *                                         margin in the calculation.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		outerWidth: function(value, includeMargin) {
+			var list = ['padding-left', 'padding-right', 'border-left-width', 'border-right-width'];
+
+			if ((fn.isBoolean(value) && value) || includeMargin) {
+				list.push.apply(list, ['margin-left', 'margin-right']);
 			}
-		},
-		// - .innerWidth()
-		// Get the first element's width without border, padding and margin of the set of matched elements.
-		// @return {Number}
-		// - 
-		innerWidth: function() {
-			var value = 0,
-				self = this;
-			each(['padding-left', 'padding-right'], function() {
-				value += parseInt(self.css(this));
-			});
-			return parseInt(this.css('width')) + value;
-		},
-		// - .outerWidth(includeMargin)
-		// Get the first element's width with padding and border, even include the margin of the set of matched elements.
-		// @return {Number}
-		// - 
-		outerWidth: function(includeMargin) {
-			var value = 0,
-				self = this;
-			each(['padding-left', 'padding-right', 'border-left-width', 'border-right-width'], function() {
-				value += parseInt(self.css(this));
-			});
-			if (includeMargin) {
-				value += (parseInt(this.css('margin-left')) + parseInt(this.css('margin-right')));
+			if (fn.isBoolean(value) || !fn.isDefined(value)) {
+				value = undefined;
 			}
-			return parseInt(this.css('width')) + value;
+			return getWidthHeight(this, 'width', list, value);
 		},
-		// - .parent([selector])
-		// Get the parent element from first element of the set of matched element, optionally filtered by a selector.
-		// @param {String} selector The string of selector.
-		// @param {Object} selector The jet object, array, array-like object that for filtering.
-		// @param {Function} selector The callback function that execute for every matched elements.
-		// @return {jetObject}
-		// - 
+
+		/**
+		 * Get the parent of each element in the current set of matched
+		 * elements, optionally filtered by a selector.
+		 *
+		 * @param      {String}     selector  A string containing a selector
+		 *                                    expression to match elements
+		 *                                    against.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
 		parent: function(selector) {
-			var elem = this[0],
-				parent;
-			if (!elem) return jet();
-			while (elem = elem.parentNode) {
-				if (!selector) {
-					return (elem) ? jet(elem) : jet();
-				} else if (jet(elem).is(selector)) {
-					return jet(elem);
+			var elem = this[0];
+			if (!elem) return Jet();
+
+			while (!!(elem = elem.parentNode)) {
+				if (!selector || Jet(elem).is(selector)) {
+					return Jet(elem);
 				}
 			}
-			return jet();
+			return Jet();
 		},
-		// - .parents([selector])
-		// Get the ancestors from first element of the set of matched element, optionally filtered by a selector.
-		// @param {String} selector The string of selector.
-		// @param {Object} selector The jet object, array, array-like object that for filtering.
-		// @param {Function} selector The callback function that execute for every matched elements.
-		// @return {jetObject}
-		// - 
-		parents: function(selector) {
+
+		/**
+		 * Get the ancestors of each element in the current set of matched
+		 * elements, optionally filtered by a selector, stop scanning by another
+		 * selector
+		 *
+		 * @param      {String}     selector  A string containing a selector
+		 *                                    expression to match elements
+		 *                                    against.
+		 * @param      {String}     until     A string containing a selector
+		 *                                    expression to match elements
+		 *                                    against to stop scanning.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		parents: function(selector, until) {
 			var elements = [],
 				elem = this[0];
 			if (!elem) return null;
-			while (elem = elem.parentNode) {
+
+			while (!!(elem = elem.parentNode)) {
 				if (!parent && parent.nodeType === 11) {
 					break;
 				}
-				if (!selector || jet(elem).is(selector)) {
+				if (!selector || Jet(elem).is(selector)) {
 					elements.push(elem);
 				}
-			}
-			return jet(elements);
-		},
-		// - .childs([selector])
-		// Get the child elements from first element of the set of matched element, optionally filtered by a selector.
-		// @param {String} selector The string of selector.
-		// @param {Object} selector The jet object, array, array-like object that for filtering.
-		// @param {Function} selector The callback function that execute for every matched elements.
-		// @return {jetObject}
-		// - 
-		childs: function(selector) {
-			var elements = [],
-				elem = this[0];
-			if (!elem) return null;
-			elem = elem.childNodes[0];
-			while (elem = siblingElement(elem, 'next')) {
-				if (!selector || jet(elem).is(selector)) {
-					elements.push(elem);
+				if (!until || Jet(elem).is(until)) {
+					break;
 				}
 			}
-			return jet(elements);
+			return Jet(elements);
 		},
-		// - .scrollTop([value])
-		// Get the first element's scroll top of the set of matched elements or set the scroll top for every matched element.
-		// @param {Number} value The value of scroll top to set.
-		// @return {jetObject|Number}
-		// - 
-		scrollTop: function(value) {
-			var y = 0,
-				elem = this[0];
-			if (core.isDefined(value)) {
-				if (core.isJetObject(value)) {
-					console.log(value.boxRect());
-				} else if (core.isElement(value)) {
-					value = jet(value).scrollTop();
-				} else {
-					value = parseInt(value);
-				}
-				elem.scrollTop = value;
-				console.log(elem, elem.scrollTop);
-				return this;
-			} else {
-				if (elem == doc || elem == win) {
-					y = (win.pageYOffset || doc.scrollTop) - (doc.clientTop || 0);
-				} else if (core.nodeName(elem, 'body')) {
-					y = docElem.scrollTop || elem.scrollTop || 0;
-				} else if (core.isElement(elem)) {
-					y = elem.scrollTop || 0;
-				}
-				return (isNaN(y)) ? 0 : y;
-			}
-		},
-		// - .scrollLeft([value])
-		// Get the first element's scroll left of the set of matched elements or set the scroll left for every matched element.
-		// @param {Number} value The value of scroll left to set.
-		// @return {jetObject|Number}
-		// - 
-		scrollLeft: function(value) {
-			var x = 0,
-				elem = this[0];
-			if (core.isDefined(value)) {
-				value = parseInt(value);
-				win.scrollTo(value, this.scrollTop());
-				return this;
-			} else {
-				if (core.nodeName(elem, 'body')) {
-					x = docElem.scrollLeft || elem.scrollLeft || 0;
-				} else if (core.isElement(elem)) {
-					x = elem.scrollLeft || 0;
-				}
-				return x;
-			}
-		},
-		// - .scrollTo(x, y)
-		// Scroll every matched element to specified position.
-		// @param {Number} x The value of scroll left to set.
-		// @param {Number} y The value of scroll top to set.
-		// @return {jetObject}
-		// - 
+
+		/**
+		 * Get the current position of the scroll bar for the first element in
+		 * the set of matched elements or set the position of the scroll bar for
+		 * every matched element by specfied value or DOMElement.
+		 *
+		 * @param      {Number}            x       A number indicating the new
+		 *                                         position to set the horizonal
+		 *                                         scroll bar to.
+		 * @param      {Number}            y       A number indicating the new
+		 *                                         position to set the vertical
+		 *                                         scroll bar to.
+		 * @return     {Object|JetObject}  { description_of_the_return_value }
+		 */
 		scrollTo: function(x, y) {
-			var point = {
-				x: 0,
-				y: 0
-			};
-			if (core.isJetObject(x)) {
-				point = x.offset();
-			} else if (core.isElement(x)) {
-				point = jet(x).offset();
-			} else {
-				point.x = parseInt(x);
-				point.y = parseInt(y);
-			}
-			each(this, function() {
-				if (core.isFunction(this.scrollTo)) {
-					this.scrollTo(x, y);
+			if (fn.isDefined(x)) {
+				if (x.constructor == JetObject || fn.isDOMElement(x)) {
+					this.scrollTop(x);
+					this.scrollLeft(x);
+				} else {
+					if (fn.isDefined(y)) {
+						this.scrollTop(parseInt(y));
+					}
+					this.scrollLeft(parseInt(x));
 				}
-			});
-			return this;
+				return this;
+			} else {
+				return {
+					x: this.scrollLeft(),
+					y: this.scrollTop()
+				};
+			}
 		},
-		// - .handler(event)
-		// Get the first element's event callback function of the set of matched elements
-		// @param {String} event The name of event to get.
-		// @return {Function}
-		// - 
-		handler: function(event) {
-			var elem = this[0];
-			return elem[bindmap[event] || 'on' + event] || elem[event];
+
+		/**
+		 * Reduce the set of matched elements to those that match the selector
+		 * or pass the function’s test.
+		 *
+		 * @param      {String}    selector  A string containing a
+		 *                                            selector expression to
+		 *                                            match the current set of
+		 *                                            elements against.
+		 * @param      {Function}  selector  A function used as a test for each element in
+		 *                                   the set. this is the current DOM element.
+		 * @return     {(Array|JetObject)}  { description_of_the_return_value }
+		 */
+		filter: function(selector) {
+			var JetObj = new JetObject();
+			if (fn.isCallable(selector)) {
+				fn.each(this, function() {
+					if (selector.call(this)) {
+						JetObj.push(this);
+					}
+				});
+			} else if (fn.isString(selector)) {
+				fn.each(this, function() {
+					if (Jet(this).is(selector)) {
+						JetObj.push(this);
+					}
+				});
+			}
+			return JetObj;
 		},
-		// - .formdata()
-		// Encode a set of form elements as a FormData object
-		// @return {FormData}
+
+		/**
+		 * Returns the FormData object from the first of the matched elements
+		 *
+		 * @return     {FormData}  { description_of_the_return_value }
+		 */
 		formdata: function() {
-			var elem = this[0], returns = {}, formset, formdata = new FormData();
-			if (core.isDefined(elem)) {
-				if (core.nodeName(elem, 'form') && elem.elements) {
-					formset = elem.elements
+			var elem = this[0], formset, formdata = new FormData();
+			if (fn.isDefined(elem)) {
+				if (elem.nodeName.toLowerCase() == 'form' && elem.elements) {
+					formset = elem.elements;
 				} else {
 					formset = this.find('*');
 				}
-				jet(formset).filter(function() {
-					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
+				Jet(formset).filter(function() {
+					if (regexSubmitName.test(this.tagName) && !regexSubmitType.test(this.type) && !this.disabled && (!regexCheckable.test(this.type)) || this.checked) {
 						return true;
 					}
 					return false;
@@ -2268,307 +3348,1099 @@
 			}
 			return formdata;
 		},
-		// - .values()
-		// Encode a set of form elements as a object
-		// @return {PlainObject}
-		values: function() {
-			var elem = this[0], returns = {}, formset;
-			if (core.isDefined(elem)) {
-				if (core.nodeName(elem, 'form') && elem.elements) {
-					formset = elem.elements
-				} else {
-					formset = this.find('*');
-				}
-				jet(formset).filter(function() {
-					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
-						return true;
-					}
-					return false;
-				}).each(function(i, elem) {
-					var value = jet(elem).value(), matches = elem.name.match(/(.+)\[(.+)\]/);
-					if (matches) {
-						if (!core.isDefined(returns[matches[1]])) {
-							returns[matches[1]] = {};
-						}
-						returns[matches[1]][matches[2]] = value;
+
+		/**
+		 * Get the value of an attribute for the first element in the set of
+		 * matched elements or set one or more attributes for every matched
+		 * element.
+		 *
+		 * @param      {String}       attr    The name of the attribute to get.
+		 * @param      {PlainObject}  value   An object of attribute-value pairs
+		 *                                    to set.
+		 * @param      {String}    value   The value
+		 * @param      {Function}  value   A function returning the value to set. this is
+		 *                                 the current element. Receives the index position
+		 *                                 of the element in the set and the old attribute
+		 *                                 value as arguments.
+		 * @return     {JetObject}    { description_of_the_return_value }
+		 */
+		attr: function(attr, value) {
+			var elem,
+				self = this;
+			if (fn.isPlainObject(attr)) {
+				fn.each(attr, function(attribute, val) {
+					self.attr(attribute, val);
+				});
+			} else {
+				if (fn.isDefined(value)) {
+					if (value === null) {
+						this.removeAttr(attr);
 					} else {
-						returns[elem.name] = value;
+						fn.each(this, function() {
+							var newValue = (fn.isCallable(value)) ? value.call(Jet(this).attr(attr)) : value;
+							if (this.setAttribute) {
+								this.setAttribute(attr, newValue);
+							} else {
+								this[attrBindmap[attr.toLowerCase()] || attr] = newValue;
+							}
+						});
+					}
+				} else {
+					elem = this[0];
+					if (elem) {
+						return (fn.isIE || !elem.getAttribute) ? elem[attrBindmap[attr.toLowerCase()] || attr] : elem.getAttribute(attr, 2);
+					}
+					return null;
+				}
+			}
+			return this;
+		},
+
+		/**
+		 * Remove an attribute from each element in the set of matched elements.
+		 *
+		 * @param      {String}     attr    The name of the attribute to remove.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		removeAttr: function(attr) {
+			if (fn.isString(attr)) {
+				fn.each(this, function() {
+					if (this.removeAttribute) {
+						this.removeAttribute(attr);
 					}
 				});
 			}
-			return returns;
+			return this;
 		},
 
-		// - .serialize()
-		// Encode a set of form elements as a string for submission.
-		// @return {String}
-		// - 
-		serialize: function() {
-			var elem = this[0], formset;
-			if (core.isDefined(elem)) {
-				if (core.nodeName(elem, 'form') && elem.elements) {
-					formset = elem.elements
+
+		/**
+		 * Get the value of a property for the first element in the set of
+		 * matched elements or set one or more properties for every matched
+		 * element.
+		 *
+		 * @param      {String}       prop    The name of the property to get.
+		 * @param      {PlainObject}  value   An object of property-value pairs
+		 *                                    to set.
+		 * @param      {String}    value   An object of property-value pairs to set.
+		 * @param      {Function}  value   A function returning the value to set. Receives
+		 *                                 the index position of the element in the set and
+		 *                                 the old property value as arguments. Within the
+		 *                                 function, the keyword this refers to the current
+		 *                                 element.
+		 * @return     {JetObject}    { description_of_the_return_value }
+		 */
+		prop: function(prop, value) {
+			var elem, self = this;
+			if (fn.isPlainObject(prop)) {
+				fn.each(prop, function(pp, val) {
+					self.prop(pp, val);
+				});
+			} else {
+				if (fn.isDefined(value)) {
+					fn.each(this, function() {
+						var pp = propBindmap[prop] || prop;
+						this[pp] = (fn.isCallable(value)) ? value.call(this) : value;
+					});
 				} else {
-					formset = this.find('*');
+					elem = this[0];
+					if (elem) {
+						return elem[propBindmap[prop] || prop];
+					}
+					return null;
 				}
-				return jet.buildQueryString(jet(formset).filter(function() {
-					if (regex.submitName.test(this.tagName) && !regex.submitType.test(this.type) && !this.disabled && (!regex.checkable.test(this.type)) || this.checked) {
+			}
+			return this;
+		},
+
+		/**
+		 * Remove a property from each element in the set of matched elements.
+		 *
+		 * @param      {String}  prop    The name of the property to remove.
+		 * @return     {Object}  { description_of_the_return_value }
+		 */
+		removeProp: function(prop) {
+			if (fn.isString(prop)) {
+				fn.each(this, function() {
+					delete this[prop];
+				});
+			}
+			return this;
+		},
+
+		/**
+		 * Determines if the property is exists in the first of matched elements.
+		 *
+		 * @param      {String}   prop    The name of the property to determine
+		 * @return     {boolean}  True if has property, False otherwise.
+		 */
+		hasProp: function(prop) {
+			var elem = this[0];
+			return elem && (fn.isDefined(elem[propBindmap[prop] || prop]) || elem.hasOwnProperty(propBindmap[prop] || prop));
+		},
+
+		/**
+		 * Get the check status from the first element in the set of matched
+		 * elements or set the check status for every matched element.
+		 *
+		 * @param      {boolean}            value   A Boolean indicating whether
+		 *                                          to the elements is checked
+		 *                                          or not
+		 * @return     {JetObject|boolean}  { description_of_the_return_value }
+		 */
+		checked: function(value) {
+			if (fn.isDefined(value)) {
+				fn.each(this.filter(function() {
+					if (regexCheckable.test(this.type)) {
 						return true;
 					}
 					return false;
-				}).walk(function(i, elem) {
-					var value = jet(elem).value();
-					if (core.isArray(value)) {
-						return jet.walk(value, function() {
-							return {
-								name: elem.name + '[]',
-								value: this
-							};
-						});
+				}), function() {
+					Jet(this).prop('checked', (value) ? true : false);
+				});
+				return this;
+			} else {
+				return Jet(this).attr('checked') || !!(Jet(this).prop('checked'));
+			}
+		},
+
+		/**
+		 * Get the current value of the first element in the set of matched
+		 * elements or set the value of every matched element.
+		 *
+		 * @param      {String|Function}  value   A string of text, a number, or
+		 *                                        an array of strings
+		 *                                        corresponding to the value of
+		 *                                        each matched element to set as
+		 *                                        selected/checked. Or a
+		 *                                        function returning the value
+		 *                                        to set. this is the current
+		 *                                        element. Receives the index
+		 *                                        position of the element in the
+		 *                                        set and the old value as
+		 *                                        arguments.
+		 * @return     {*}                { description_of_the_return_value }
+		 */
+		val: function(value) {
+			if (fn.isDefined(value)) {
+				fn.each(this, function() {
+					var parent;
+					if (regexCheckable.test(this.type)) {
+						parent = Jet(fn.owner(this).document.body);
+						parent.find('input[type=' + Jet(this).prop('type') + '][name="' + Jet(this).prop('name') + '"]').checked(false).filter(function() {
+							return value.indexOf(Jet(this).prop('value')) != -1;
+						}).checked(true);
+					} else if (regexSubmitName.test(this.tagName)) {
+						this.value = (fn.isCallable(value)) ? value.call(this) : value;
+					} else if (this.tagName.toLowerCase() == 'select') {
+						if (this.type == 'select-multiple') {
+							if (!fn.isIterator(value)) {
+								value = [value];
+							}
+						} else {
+							if (fn.isIterator(value)) {
+								value.slice(0, 1);
+							}
+						}
+						Jet(this).find('option').prop('selected', false).filter(function() {
+							return value.indexOf(Jet(this).prop('value')) != -1;
+						}).prop('selected', true);
 					} else {
-						return {
-							name: elem.name,
-							value: value
-						};
+						Jet(this).prop('value', value);
 					}
-				}));
-			}
-			return '';
-		},
-
-		// - jet.hasClass(classes)
-		// Check the first element of the set of matched elements has included one or more classes.
-		// @param {DOMElement} element The element to check the class.
-		// @param {Array} list A list of class.
-		// @return {Boolean}
-		// - 
-		hasClass: function(classes) {
-			var elem = this[0];
-			if (!core.isDefined(elem)) return false;
-			if (core.isString(classes)) {
-				classes = classes.split();
-			} else if (!core.isArray(classes)) {
-				classes = [];
-			}
-			return core.hasClass(elem, classes);
-		},
-
-		// - .hasClass(classes)
-		// Check the first element of the set of matched elements is checkable or not.
-		// @return {Boolean}
-		// - 
-		checkable: function() {
-			var elem = this[0];
-			return (regex.submitName.test(elem.tagName) && !elem.disabled && regex.checkable.test(elem.type));
-		},
-
-		// - .check()
-		// Check a set of checkbox or radiobox.
-		// @return {JetObject}
-		// - 
-		check: function() {
-			each(this, function() {
-				if (jet(this).checkable()) {
-					jet(this).attr('checked', 'checked');
-					jet(this).prop('checked', true);
+				});
+				return this;
+			} else {
+				if (this.length) {
+					var elem = this[0], parent;
+					if (regexCheckable.test(elem.type)) {
+						parent = Jet(fn.owner(this).document.body);
+						if (elem.type == 'radio') {
+							return parent.find('input[type=' + Jet(elem).prop('type') + '][name="' + Jet(elem).prop('name') + '"]:checked').prop('value');
+						} else {
+							return fn.walk(parent.find('input[type=' + Jet(elem).prop('type') + '][name="' + Jet(elem).prop('name') + '"]:checked'), function() {
+								return Jet(this).prop('value');
+							});
+						}
+					} else if (regexSubmitName.test(elem.tagName)) {
+						return elem.value;
+					} else if (elem.tagName.toLowerCase() == 'select') {
+						if (elem.type == 'select-multiple') {
+							return fn.walk(Jet(elem).find('option:checked'), function() {
+								return Jet(this).prop('value');
+							});
+						} else {
+							return Jet(elem).find('option:checked').prop('value');
+						}
+					} else {
+						return Jet(elem).prop('value');
+					}
 				}
-			});
-			return this;
+				return null;
+			}
 		},
 
-		// - .uncheck()
-		// Uncheck a set of checkbox or radiobox.
-		// @return {JetObject}
-		// - 
-		uncheck: function() {
-			each(this, function() {
-				if (jet(this).checkable()) {
-					jet(this).removeProp('checked');
-					jet(this).removeAttr('checked');
-				}
-			});
-			return this;
-		},
+		/**
+		 * Store arbitrary data associated with the matched elements or return
+		 * the value at the named data store for the first element in the set of
+		 * matched elements.
+		 *
+		 * @param      {String}   name    A string naming the piece of data to
+		 *                                set.
+		 * @param      {object}   object  The new data value; this can be any
+		 *                                Javascript type except undefined.
+		 * @param      {boolean}  clone   A Boolean indicating whether to clone
+		 *                                the new value object
+		 * @return     {*}        { description_of_the_return_value }
+		 */
+		data: function(name, object, clone) {
+			function createDataSet(element) {
+				element.dataset = {};
+				fn.each(element.attributes, function() {
+					if (this.indexOf('data-') === 0) {
+						element.dataset[this.substr(5)] = element[this];
+					}
+				});
+			}
 
-		// - .checked()
-		// Return the first element of the set of matched elements is checked or not or check or uncheck all matched elements
-		// @param {Boolean} ischeck Check or Uncheck
-		// @return {JetObject|Boolean}
-		// - 
-		checked: function(ischeck) {
-			if (jet.isDefined(ischeck)) {
-				if (!!ischeck) {
-					this.check();
+			if (!fn.isDefined(name)) {
+				return this[0].dataset;
+			} else {
+				if (fn.isDefined(object)) {
+					fn.each(this, function() {
+						if (!fn.isDefined(this.dataset)) {
+							createDataSet(this);
+						}
+						this.dataset[name] = (clone) ? fn.clone(object) : object;
+					});
+					return this;
 				} else {
-					this.uncheck();
+					var value, dataset;
+					if (fn.isString(name)) {
+						name = name.trim();
+						if (!fn.isDefined(this[0].dataset)) {
+							createDataSet(this[0]);
+						}
+						value = this[0].dataset[name];
+
+						if (value) {
+							if (fn.isString(value)) {
+								try {
+									return JSON.parse(value);
+								} catch(e) {
+									return value;
+								}
+							}
+							return value;
+						}
+					}
+					return null;
+				}
+			}
+		},
+
+		/**
+		 * Set a delay timer for next animation
+		 *
+		 * @param      {Number}     duration  The duration of delay timer in
+		 *                                    millisecond
+		 * @param      {Function}   callback  A function to call once the
+		 *                                    animation is complete, called
+		 *                                    once per matched element.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		wait: function(duration, callback) {
+			fn.each(this, function() {
+				var elem = this;
+				defineAnimateThread(elem);
+
+				this.animateThread.add(function() {
+					var action = this;
+					action.wait();
+					setTimeout(function() {
+						action.resume();
+						if (fn.isCallable(callback)) {
+							callback.call(elem);
+						}
+					}, duration);
+				});
+			});
+			return this;
+		},
+
+		/**
+		 * Perform a custom animation of a set of CSS properties.
+		 *
+		 * @param      {PlainObject}  css       An object of CSS properties and
+		 *                                      values that the animation will
+		 *                                      move toward.
+		 * @param      {Number}       duration  A string or number determining
+		 *                                      how long the animation will run.
+		 * @param      {String}       easing    A string indicating which easing
+		 *                                      function to use for the
+		 *                                      transition.
+		 * @param      {Function}     callback  A function to call once the
+		 *                                      animation is complete, called
+		 *                                      once per matched element.
+		 * @return     {JetObject}    { description_of_the_return_value }
+		 */
+		animate: function(css, duration, easing, callback) {
+			fn.each(this, function() {
+				var elem = this, transition = {};
+				if (!easing || !(new RegExp(easingType)).test(easing.replace(/\s+/g, '', easing))) {
+					easing = 'linear';
+				}
+
+				transition = defineAnimateThread(elem);
+
+				this.animateThread.add(function() {
+					var action = this, allType = true, delay = 0, animationObj = {};
+					action.wait();
+
+					if (css.constructor == fn.Transform) {
+						css.set({
+							duration: duration,
+							easing: easing
+						});
+						css.bind(elem);
+					} else {
+						fn.each(css, function(cssprop, value) {
+							if (fn.isPlainObject(value)) {
+								if (value.value) {
+									if (!value.easing || !(new RegExp(easingType)).test(value.easing)) {
+										value.easing = 'linear';
+									}
+									transition[cssprop] = cssprop + ' ' + ((value.duration || duration) / 1000) + 's ' + (value.easing || easing) + ' '  + ((value.delay || 0) / 1000) + 's';
+									Jet(elem).css(cssprop, value.value);
+									allType = false;
+									if (value.delay > delay) {
+										delay = value.delay;
+									}
+									if (value.duration > duration) {
+										duration = value.duration;
+									}
+								}
+							} else {
+								if (cssprop == 'transform') {
+									value.bind(elem);
+								} else {
+									Jet(elem).css(cssprop, value);
+								}
+								transition[cssprop] = cssprop + ' ' + (duration / 1000) + 's ' + easing + ' 0s';
+							}
+						});
+
+						if (allType) {
+							transition = 'all ' + (duration / 1000) + 's ' + easing + ' 0s';
+						} else {
+							delete transition.all;
+							transition = Object.keys(transition).map(function (key) {
+								return transition[key];
+							}).join(', ');
+						}
+						Jet(elem).css('transition', transition);
+					}
+
+					setTimeout(function() {
+						if (fn.isCallable(callback)) {
+							callback.call(elem);
+						}
+						action.resume();
+					}, duration + delay);
+				});
+
+				if (this.animateThread.getStatus() == 'pending') {
+					this.animateThread.resolve();
+				}
+			});
+			return this;
+		},
+
+		/**
+		 * Hide the matched elements.
+		 *
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		hide: function() {
+			fn.each(this, function(i, elem) {
+				var JetObj = Jet(elem);
+				if (JetObj.css('display') !== 'none') {
+					elem.defaultDisplay = JetObj.css('display');
+					JetObj.css('display', 'none');
+				}
+			});
+			return this;
+		},
+
+		/**
+		 * Show the matched elements.
+		 *
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		show: function() {
+			fn.each(this, function(i, elem) {
+				var JetObj = Jet(elem);
+				if (JetObj.css('display') === 'none') {
+					JetObj.css('display', elem.defaultDisplay || 'block');
+				}
+			});
+			return this;
+		}
+	});
+
+	fn.each(['after', 'before', 'append', 'prepend', 'appendTo', 'prependTo'], function() {
+		var method = this, noTo = (method.indexOf('To') == -1);
+		/**
+		 * Insert content, specified by the parameter, after each element in the
+		 * set of matched elements.
+		 *
+		 * @name       after
+		 * @param      {*}          element  HTML string, DOM element, text
+		 *                                   node, array of elements and text
+		 *                                   nodes, or Jet object to insert
+		 *                                   after each element in the set of
+		 *                                   matched elements.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		/**
+		 * Insert content, specified by the parameter, before each element in
+		 * the set of matched elements.
+		 *
+		 * @name       before
+		 * @param      {*}          element  HTML string, DOM element, text
+		 *                                   node, array of elements and text
+		 *                                   nodes, or Jet object to insert
+		 *                                   after each element in the set of
+		 *                                   matched elements.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		/**
+		 * Insert content, specified by the parameter, to the end of each
+		 * element in the set of matched elements.
+		 *
+		 * @name       append
+		 * @param      {*}          element  HTML string, DOM element, text
+		 *                                   node, array of elements and text
+		 *                                   nodes, or Jet object to insert
+		 *                                   after each element in the set of
+		 *                                   matched elements.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		/**
+		 * Insert content, specified by the parameter, to the beginning of each
+		 * element in the set of matched elements.
+		 *
+		 * @name       prepend
+		 * @param      {*}          element  HTML string, DOM element, text
+		 *                                   node, array of elements and text
+		 *                                   nodes, or Jet object to insert
+		 *                                   after each element in the set of
+		 *                                   matched elements.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		/**
+		 * Insert every element in the set of matched elements to the end of the
+		 * target.
+		 *
+		 * @name       appendTo
+		 * @param      {*}          element  HTML string, DOM element, text
+		 *                                   node, array of elements and text
+		 *                                   nodes, or Jet object to insert
+		 *                                   after each element in the set of
+		 *                                   matched elements.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		/**
+		 * Insert every element in the set of matched elements to the beginning
+		 * of the target.
+		 *
+		 * @name       prependTo
+		 * @param      {*}          element  HTML string, DOM element, text
+		 *                                   node, array of elements and text
+		 *                                   nodes, or Jet object to insert
+		 *                                   after each element in the set of
+		 *                                   matched elements.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		JetObject.prototype[method] = function(element) {
+			insertTo((noTo) ? this : element, (noTo) ? element : this, (method[0] == 'a'), (method.indexOf('p') == -1));
+			return this;
+		};
+	});
+
+	function defineAnimateThread(elem) {
+		var transition = {}, matches;
+		if (!fn.isDefined(elem.animateThread) || elem.animateThread.getStatus() == 'completed') {
+			elem.animateThread = fn.Thread();
+			while (!!(matches = transitionFormula.exec(Jet(elem).css('transition')))) {
+				transition[matches[1]] = matches[0];
+			}
+			elem.animateThread.default = fn.clone(transition);
+			elem.animateThread.finally(function() {
+				Jet(elem).css('transition', elem.animateThread.default);
+			});
+		}
+		return transition;
+	}
+	fn.each('click dblClick focus blur change select mouseEnter mouseLeave mouseOver mouseOut submit mouseDown mouseUp mouseMove scroll wheel resize'.split(' '), function() {
+		(function(event) {
+			/**
+			 * Bind an event handler to the "focus" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       click
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "dblClick" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       dblClick
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "focus" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       focus
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "blur" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       blur
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "change" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       change
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "select" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       select
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseEnter" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       mouseEnter
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseLeave" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       mouseLeave
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseOver" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       mouseOver
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseOut" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       mouseOut
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseUp" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       mouseUp
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseDown" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       mouseDown
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "submit" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       submit
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "mouseMove" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       mouseMove
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "scroll" JavaScript event, or trigger that
+			 * event on an element.
+			 *
+			 * @name       scroll
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "wheel" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       wheel
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			/**
+			 * Bind an event handler to the "resize" JavaScript event, or trigger
+			 * that event on an element.
+			 *
+			 * @name       resize
+			 * @param      {Function}   callback  A function to execute each time the
+			 *                                    event is triggered.
+			 * @return     {JetObject}  { description_of_the_return_value }
+			 */
+			JetObject.prototype[event] = function(callback) {
+				if (fn.isDefined(callback)) {
+					this.on(event, callback);
+				} else {
+					this.trigger(event);
+				}
+				return this;
+			};
+		})(this);
+	});
+
+	fn.each(['Width', 'Height'], function(key, name) {
+		var prop = name.toLowerCase();
+		/**
+		 * Get the current computed height for the first element in the set of
+		 * matched elements or set the height of every matched element.
+		 *
+		 * @name       height
+		 * @param      {String|Function}  value   An integer representing the number
+		 *                                        of pixels, or an integer with an
+		 *                                        optional unit of measure appended
+		 *                                        (as a string). Or a function
+		 *                                        returning the height to set.
+		 *                                        Receives the index position of the
+		 *                                        element in the set and the old
+		 *                                        height as arguments. Within the
+		 *                                        function, this refers to the
+		 *                                        current element in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		/**
+		 * Get the current computed width for the first element in the set of
+		 * matched elements or set the width of every matched element.
+		 *
+		 * @name       width
+		 * @param      {String|Function}  value   An integer representing the number
+		 *                                        of pixels, or an integer with an
+		 *                                        optional unit of measure appended
+		 *                                        (as a string). Or a function
+		 *                                        returning the height to set.
+		 *                                        Receives the index position of the
+		 *                                        element in the set and the old
+		 *                                        height as arguments. Within the
+		 *                                        function, this refers to the
+		 *                                        current element in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		JetObject.prototype[prop] = function(value) {
+			if (fn.isDefined(value)) {
+				fn.each(this, function(i) {
+					var el, newValue;
+					el = Jet(this);
+					newValue = (fn.isCallable(value)) ? value.call(this, i, el.css(prop)) : value;
+					if (!regexUnit.test(newValue)) {
+						newValue += 'px';
+					}
+					el.css(prop, newValue);
+				});
+				return this;
+			} else {
+				if (!this.length || fn.isWindow(this[0])) {
+					return parseInt(win['inner' + name]);
+				} else if (fn.isDocument(this[0])) {
+					return parseInt(this[0].documentElement['client' + name] || Jet(this[0]).css('client' + name));
+				} else {
+					return parseInt(this.css(prop));
+				}
+			}
+		};
+	});
+
+	fn.each(['margin', 'padding', 'border-width'], function(key, name) {
+		/**
+		 * Get the current margin for the first element in the set of
+		 * matched elements or set the margin of every matched element.
+		 *
+		 * @name       margin
+		 * @param      {String|Function}  value   An integer representing the number
+		 *                                        of pixels, or an integer with an
+		 *                                        optional unit of measure appended
+		 *                                        (as a string). Or a function
+		 *                                        returning the height to set.
+		 *                                        Receives the index position of the
+		 *                                        element in the set and the old
+		 *                                        height as arguments. Within the
+		 *                                        function, this refers to the
+		 *                                        current element in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		/**
+		 * Get the current padding for the first element in the set of
+		 * matched elements or set the padding of every matched element.
+		 *
+		 * @name       padding
+		 * @param      {String|Function}  value   An integer representing the number
+		 *                                        of pixels, or an integer with an
+		 *                                        optional unit of measure appended
+		 *                                        (as a string). Or a function
+		 *                                        returning the height to set.
+		 *                                        Receives the index position of the
+		 *                                        element in the set and the old
+		 *                                        height as arguments. Within the
+		 *                                        function, this refers to the
+		 *                                        current element in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		/**
+		 * Get the current border-width for the first element in the set of
+		 * matched elements or set the border-width of every matched element.
+		 *
+		 * @name       borderWidth
+		 * @param      {String|Function}  value   An integer representing the number
+		 *                                        of pixels, or an integer with an
+		 *                                        optional unit of measure appended
+		 *                                        (as a string). Or a function
+		 *                                        returning the height to set.
+		 *                                        Receives the index position of the
+		 *                                        element in the set and the old
+		 *                                        height as arguments. Within the
+		 *                                        function, this refers to the
+		 *                                        current element in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		JetObject.prototype[fn.camelCase(name)] = function(value) {
+			var result,
+				object = {
+					top: 0,
+					right: 0,
+					bottom: 0,
+					left: 0
+				},
+				self = this,
+				pos;
+			if (fn.isDefined(value)) {
+				if (fn.isPlainObject(value)) {
+					fn.each(['top', 'right', 'bottom', 'left'], function() {
+						if (fn.isDefined(value[this])) {
+							if (!regexUnit.test(value[this])) {
+								value[this] += 'px';
+							}
+							self.css(((pos = name.indexOf('-')) >= 0) ? name.substr(0, pos) + '-' + this + '-' + name.substr(pos + 1) : name + '-' + this, value[this]);
+						}
+					});
+				} else if (fn.isString(value) || fn.isNumber(value)) {
+					if (!regexUnit.test(value)) {
+						value += 'px';
+					}
+					this.css(name, value);
 				}
 				return this;
 			} else {
-				var elem = jet(this[0]);
-				return elem.is(':checked') || elem.prop('checked');
+				result = this.css(name).split(' ');
+				object.top = parseInt(result[0]);
+				object.right = parseInt(result[1] || result[0]);
+				object.bottom = parseInt(result[2] || result[0]);
+				object.left = parseInt(result[3] || result[1] || result[0]);
+				return object;
 			}
-		}
-	});
-	// .first() and .last()
-	// - .first()
-	// Get first child element from the first element of a set of matches elements. Equivalent as jet.is(':first-child').
-	// @return {JetObject}
-	// @added 1.1.0
-	// - 
-	// - .last()
-	// Get last child element from the first element of a set of matches elements. Equivalent as jet.is(':first-child').
-	// @return {JetObject}
-	// @added 1.1.0
-	// - 
-	each('first last'.split(' '), function() {
-		jetObject.prototype[this] = (function(name) {
-			return function() {
-				var element = this[0];
-				if (element && core.isElement(element)) {
-					return jet(childElement(element, name));
-				}
-				return null;
-			};
-		})(this);
+		};
 	});
 
-	// .next() and .prev()
-	// - .next()
-	// Get next child element from the first element of a set of matches elements. Equivalent as jet.is(':first-child').
-	// @return {JetObject}
-	// @added 1.1.0
-	// - 
-	// - .prev()
-	// Get previous child element from the first element of a set of matches elements. Equivalent as jet.is(':first-child').
-	// @return {JetObject}
-	// @added 1.1.0
-	// - 
-	each('next previous'.split(' '), function() {
-		jetObject.prototype[this.substring(0, 4)] = (function(name) {
-			return function(selector) {
-				var element = this[0];
-				if (core.isElement(element)) {
-					while (element = siblingElement(element, name)) {
-						if (!core.isDefined(selector) || jet(element).is(selector)) {
-							return jet(element);
-						}
+	fn.each(['addClass', 'removeClass'], function(key, name) {
+		/**
+		 * Adds the specified class(es) to each element in the set of matched
+		 * elements.
+		 *
+		 * @name       addClass
+		 * @param      {String|Function}  classname  One or more space-separated
+		 *                                           classes to be added to the
+		 *                                           class attribute of each matched
+		 *                                           element. Or a function
+		 *                                           returning one or more
+		 *                                           space-separated class names to
+		 *                                           be added to the existing class
+		 *                                           name(s). Receives the index
+		 *                                           position of the element in the
+		 *                                           set and the existing class
+		 *                                           name(s) as arguments. Within
+		 *                                           the function, this refers to
+		 *                                           the current element in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		/**
+		 * Remove a single class, multiple classes, or all classes from each element
+		 * in the set of matched elements.
+		 *
+		 * @name       removeClass
+		 * @param      {String|Function}  classname  One or more space-separated
+		 *                                           classes to be removed to the
+		 *                                           class attribute of each matched
+		 *                                           element. Or a function
+		 *                                           returning one or more
+		 *                                           space-separated class names to
+		 *                                           be removed to the existing
+		 *                                           class name(s). Receives the
+		 *                                           index position of the element
+		 *                                           in the set and the existing
+		 *                                           class name(s) as arguments.
+		 *                                           Within the function, this
+		 *                                           refers to the current element
+		 *                                           in the set.
+		 * @return     {JetObject}        { description_of_the_return_value }
+		 */
+		JetObject.prototype[name] = function(classname) {
+			if (classname) {
+				fn.each(this, function(i) {
+					var classes = [], cn;
+					fn.each(this.className.split(' '), function() {
+						classes[this] = true;
+					});
+					cn = (fn.isCallable(classname)) ? classname.call(this.className, i, this.className) : classname;
+					if (fn.isString(cn)) {
+						cn = cn.split(' ');
+					}
+
+					if (fn.isIterator(cn)) {
+						fn.each(cn, function() {
+							if (name == 'addClass') {
+								classes[this] = true;
+							} else {
+								delete classes[this];
+							}
+						});
+						this.className = Object.keys(classes).join(' ').trim();
+					}
+				});
+			}
+			return this;
+		};
+	});
+
+	fn.each({
+		scrollTop: 'height',
+		scrollLeft: 'width'
+	}, function(name, prop) {
+		var direction = name.replace('scroll', '').toLowerCase(),
+			xyOffset = (direction == 'top') ? 'pageYOffset' : 'pageXOffset';
+
+		/**
+		 * Get the current vertical position of the scroll bar for the first element
+		 * in the set of matched elements or set the vertical position of the scroll
+		 * bar for every matched element.
+		 *
+		 * @name       scrollTop
+		 * @param      {Number}     value   A number indicating the new position to
+		 *                                  set the scroll bar to.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		/**
+		 * Get the current horizortal position of the scroll bar for the first
+		 * element in the set of matched elements or set the vertical position of
+		 * the scroll bar for every matched element.
+		 *
+		 * @name       scrollLeft
+		 * @param      {Number}     value   A number indicating the new position to
+		 *                                  set the scroll bar to.
+		 * @return     {JetObject}  { description_of_the_return_value }
+		 */
+		JetObject.prototype[name] = function(value) {
+			var position = 0,
+				elem = this[0];
+			if (fn.isDefined(value)) {
+				if (value.constructor == JetObject) {
+					value = value[0];
+				}
+
+				if (fn.isDOMElement(value)) {
+					value = Jet(value).offset()[direction] + this[name]() - this.offset()[direction];
+					if (value < 0) {
+						value = 0;
+					}
+				} else {
+					value = parseInt(value);
+				}
+
+				if (fn.isWindow(elem)) {
+					elem[xyOffset] = value;
+				} else if (fn.isDocument(elem)) {
+					elem.body[name] = value;
+				} else if (fn.isDOMElement(elem)) {
+					elem[name] = value;
+				}
+				return this;
+			} else {
+				if (fn.isWindow(elem)) {
+					position = elem[xyOffset];
+				} else if (fn.isDocument(elem)) {
+					position = elem.documentElement[name] || elem.body[name] || 0;
+				} else if (fn.isDOMElement(elem)) {
+					position = elem[name] || 0;
+				}
+				return (isNaN(position)) ? 0 : position;
+			}
+		};
+	});
+
+	function siblingElement(object, type) {
+		var direction = type + 'Sibling',
+			elementDirection = type + 'ElementSibling';
+		if (!object) return null;
+		if (object[elementDirection]) {
+			return object[elementDirection];
+		} else if (object[direction]) {
+			while (!!(object = object[direction])) {
+				if (fn.isDOMElement(object)) {
+					return object;
+				}
+			}
+		}
+		return null;
+	}
+
+	fn.each('next previous'.split(' '), function() {
+		var name = this;
+		JetObject.prototype[name.substring(0, 4)] = function(selector) {
+			var element = this[0];
+			if (element) {
+				while (!!(element = siblingElement(element, name))) {
+					if (!fn.isDefined(selector) || Jet(element).is(selector)) {
+						return Jet(element);
 					}
 				}
-				return jet();
-			};
-		})(this);
-	});
-	// Add event shortcut
-	// - .click(callback)
-	// Apply or trigger OnClick event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .dblClick(callback)
-	// Apply or trigger OnDblClick event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .focus(callback)
-	// Apply or trigger OnFocus event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .blur(callback)
-	// Apply or trigger OnBlur event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .change(callback)
-	// Apply or trigger OnChange event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .select(callback)
-	// Apply or trigger OnSelect event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .mouseOver(callback)
-	// Apply or trigger OnMouseOver event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .mouseOut(callback)
-	// Apply or trigger OnMouseOut event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .ready(callback)
-	// Apply or trigger OnLoad event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .unload(callback)
-	// Apply or trigger Unload event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .submit(callback)
-	// Apply or trigger OnSubmit event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// - 
-	// - .mouseDown(callback)
-	// Apply or trigger OnMouseDown event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// @added 1.0.2-Beta
-	// - 
-	// - .mouseUp(callback)
-	// Apply or trigger OnMouseUp event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// @added 1.0.2-Beta
-	// - 
-	// - .mouseMove(callback)
-	// Apply or trigger OnMouseMove event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// @added 1.0.2-Beta
-	// - 
-	// - .scroll(callback)
-	// Apply or trigger OnScroll event to each of the set of matched elements.
-	// @param {Function} callback The callback function thet will be applied.
-	// @return {jetObject}
-	// @added 1.0.4
-	// - 
-	each('click dblClick focus blur change select mouseOver mouseOut load unload submit mouseDown mouseUp mouseMove scroll'.split(' '), function() {
-		(function(event) {
-			jetObject.prototype[event] = function(callback) {
-				if (core.isDefined(callback)) {
-					return this.bind(event.toLowerCase(), callback);
+			}
+			return Jet();
+		};
+
+		JetObject.prototype[name.substring(0, 4) + 'All'] = function(selector, until) {
+			var element = this[0], domList = [];
+			if (element) {
+				while (!!(element = siblingElement(element, name))) {
+					if (fn.isDefined(until) && Jet(element).is(until)) {
+						break;
+					}
+					if (!fn.isDefined(selector) || Jet(element).is(selector)) {
+						domList.push(element);
+					}
 				}
-				this.trigger(event);
-				return this;
-			};
-		})(this);
+			}
+			return Jet(domList);
+		};
 	});
-	// Append and Preppend function
+
+	function getWidthHeight(JetObj, type, cssprops, value) {
+		var matches,
+			el,
+			newValue = 0,
+			adjustValue = 0;
+
+		fn.each(cssprops, function() {
+			adjustValue += parseInt(JetObj.css(this));
+		});
+
+		if (fn.isDefined(value)) {
+			if (fn.isDefined(JetObj[0])) {
+				el = Jet(JetObj[0]);
+				if (fn.isString(value)) {
+					matches = regexUnit.exec(value.trim());
+					// If the value equal 'auto'
+					if (fn.isDefined(matches[3])) {
+						el.css(type, matches[3]);
+					} else if (fn.isDefined(matches[1])) {
+						if (fn.isDefined(matches[2])) {
+							newValue = el.css(type, value).css(type);
+							newValue -= adjustValue;
+						} else {
+							newValue = parseInt(matches[1]) - adjustValue;
+						}
+						el.css(type, (newValue < 0 || isNaN(newValue) ? 0 : newValue) + 'px');
+					}
+				} else if (fn.isNumber(value)) {
+					newValue = value - adjustValue;
+					el.css(type, (newValue < 0 || isNaN(newValue) ? 0 : newValue) + 'px');
+				} else if (fn.isCallable(value)) {
+					getWidthHeight(JetObj, type, cssprops, value.call(JetObj, el.css(type)));
+				}
+			}
+			return JetObj;
+		} else {
+			value = parseInt(JetObj.css(type));
+			if (value) {
+				value += adjustValue;
+			}
+			return value;
+		}
+	}
 
 	function insertTo(target, element, isAppend, isInsert) {
 		var contents, length = (target.length) ? target.length - 1 : 0;
-		if (core.isCollection(element) && element.length > 0) {
+		if (fn.isIterator(element) && element.length > 0 || element.constructor == JetObject) {
 			contents = element;
-		} else if (core.isString(element)) {
+		} else if (fn.isString(element)) {
 			contents = [doc.createTextNode(element)];
-		} else if (core.isElement(element)) {
+		} else if (fn.isDOMElement(element)) {
 			contents = [element];
 		}
-	
+
 		if (contents) {
-			each(target, function(i, el) {
-				if (!core.isDefined(el.nodeType)) {
+			fn.each(target, function(i, el) {
+				if (!fn.isDefined(el.nodeType)) {
 					return;
 				}
 
-				el = (el.nodeType === 1) ? el : core.owner(el).document.body;
-				each(contents, function(j, insert) {
+				el = (el.nodeType === 1) ? el : fn.owner(el).document.body;
+				fn.each(contents, function(j, insert) {
 					var last = (length === i) ? true : false, parent;
 
 					if (isInsert) {
@@ -2594,1234 +4466,59 @@
 				});
 			});
 		}
-		return this;
 	}
 
-	extend(jetObject.prototype, {
-		after: function(element) {
-			insertTo(this, element, true, true);
-			return this;
-		},
-		before: function(element) {
-			insertTo(this, element, false, true);
-			return this;
-		},
-		// - .append(element)
-		// Insert content to the end of each element in the set of matched elements.
-		// @param {Object} element The array, array-like object, string or DOM element that will be inserted.
-		// @return {jetObject}
-		// - 
-		append: function(element) {
-			insertTo(this, element, true);
-			return this;
-		},
-		// - .prepend(element)
-		// Insert content to the beginning of each element in the set of matched elements.
-		// @param {Object} element The array, array-like object, string or DOM element that will be inserted.
-		// @return {jetObject}
-		// - 
-		prepend: function(element) {
-			insertTo(this, element);
-			return this;
-		},
-		// - .appendTo(element)
-		// Insert every element in the set of matched elements to the end of the target.
-		// @param {Object} element The target DOM element or a list of elements as an array, array-like object or jet object.
-		// @return {jetObject}
-		// - 
-		appendTo: function(element) {
-			insertTo(element, this, true);
-			return this;
-		},
-		// - .prependTo(element)
-		// Insert every element in the set of matched elements to the beginning of the target.
-		// @param {Object} element The target DOM element or a list of elements as an array, array-like object or jet object.
-		// @return {jetObject}
-		// - 
-		prependTo: function(element) {
-			insertTo(element, this);
-			return this;
-		},
-		// - .prop(prop[, value])
-		// Get the value of a property for the first element in the set of matched elements or set one or more properties for every matched element.
-		// @param {String} prop The name of the property to set.
-		// @param {String} prop The name of the property to get.
-		// @param {Array} prop A set of property name to get.
-		// @param {Object} prop An object of property-value pairs to set.
-		// @param {String|Number|Boolean} value The value of the property to set.
-		// @return {jetObject|String|Boolean|PlainObject}
-		// - 
-		prop: function(prop, value) {
-			var returns = {},
-				elem, self = this;
-			if (core.isPlainObject(prop)) {
-				each(prop, function(pp, val) {
-					self.prop(pp, val);
-				});
-			} else if (core.isArray(prop)) {
-				elem = this[0];
-				if (elem) {
-					each(prop, function(i, pp) {
-						returns[pp] = self.prop(propmap[pp] || pp);
-					});
-				}
-				return returns;
-			} else {
-				if (core.isDefined(value)) {
-					each(this, function() {
-						var pp = propmap[prop] || prop,
-							setValue;
-						if (core.isDefined(this[pp])) {
-							var setValue = (core.isFunction(value)) ? value.call(this, this[pp]) : value;
-							this[pp] = setValue;
-						}
-					});
-				} else {
-					elem = this[0];
-					if (elem) {
-						return elem[propmap[prop] || prop];
-					}
-					return null;
-				}
-			}
-			return this;
-		},
-		// - .removeProp(prop)
-		// Remove the property for every matched element.
-		// @param {String} prop The name of the property that will be removed.
-		// @return {jetObject}
-		// - 
-		removeProp: function(prop) {
-			var pp = propmap[prop] || prop;
-			each(this, function() {
-				if (core.isElement(this)) {
-					this[pp] = undefined;
-					this.removeAttribute(pp);
-				}
+	function triggerOnLoad() {
+		if (!onHold) {
+			fn.each(onLoadEvent, function() {
+				this.call(win);
 			});
-			return this;
-		},
-		// - .css(css[, value])
-		// Get the value of a style for the first element in the set of matched elements or set one or more styles for every matched element.
-		// @param {String} css The name of the style to set.
-		// @param {String} css The name of the style to get.
-		// @param {Array} css A set of style to get.
-		// @param {Object} css An object of style-value pairs to set.
-		// @param {String|Number|Boolean} value The value of the style to set.
-		// @return {jetObject|String|Boolean|PlainObject}
-		// - 
-		css: function(css, value) {
-			var elem, cc, returns = {},
-				self = this,
-				owner;
-			if (core.isPlainObject(css)) {
-				each(css, function(style, val) {
-					self.css(style, val);
-				});
-			} else if (core.isArray(css)) {
-				elem = this[0];
-				if (core.isElement(elem)) {
-					each(css, function(i, style) {
-						returns[style] = self.css(style);
-					});
-				}
-				return returns;
-			} else {
-				cc = core.camelCase(css);
-				if (jHooks.css[cc]) {
-					return jHooks[cc](this, cc, value);
-				}
-				if (core.isDefined(value)) {
-					each(this, function() {
-						if (core.isElement(this) && core.isDefined(this.style[cc])) {
-							this.style[cc] = (core.isFunction(value)) ? value.call(this, this.style[cc]) : value;
-						}
-					});
-				} else {
-					elem = this[0];
-					if (core.isElement(elem)) {
-						owner = core.owner(elem).document;
-						if (owner.defaultView && owner.defaultView.getComputedStyle) {
-							return owner.defaultView.getComputedStyle(elem, '').getPropertyValue(css);
-						}
-						if (elem.currentStyle) {
-							return elem.currentStyle[cc];
-						}
-						return elem.style[cc];
-					}
-					return null;
-				}
-			}
-			return this;
-		},
-		// - .toggleClass(classname)
-		// Add or remove one or more classes from each element in the set of matched elements, depending on either the class’s presence or the value of the switch argument.
-		// @param {String} class One or more class names (separated by spaces) to be toggled for each element in the matched set.
-		// @return {jetObject}
-		// - 
-		toggleClass: function(classname) {
-			var classes = [];
-			each(this, function(i, elem) {
-				if (core.isElement(elem)) {
-					if (core.isString(classname)) {
-						classes = trim(classname).split(' ');
-					}
-					each(classes, function() {
-						if (!core.hasClass(elem, this)) {
-							jet(elem).addClass(this);
-						} else {
-							jet(elem).removeClass(this);
-						}
-					});
-					if (!elem.className) {
-						elem.removeAttribute('class');
-					}
-				}
-			});
-			return this;
-		},
-		// - .addClass(classname)
-		// Add one or more classes from each element in the set of matched elements.
-		// @param {String} prop One or more class names (separated by spaces) to be added for each element in the matched set.
-		// @return {jetObject}
-		// - 
-		addClass: function(classname) {
-			var classes = [];
-			each(this, function(i, elem) {
-				if (core.isElement(elem)) {
-					if (core.isString(classname)) {
-						classes = trim(classname).split(' ');
-					} else if (core.isArray(prop)) {
-						classes = classname;
-					}
-					each(classes, function() {
-						if (!core.hasClass(elem, this)) {
-							elem.className += (elem.className) ? ' ' + this : this;
-						}
-					});
-				}
-			});
-			return this;
-		},
-		// - .removeClass(classname)
-		// Remove one or more classes from each element in the set of matched elements.
-		// @param {String} prop One or more class names (separated by spaces) to be removed for each element in the matched set.
-		// @return {jetObject}
-		// - 
-		removeClass: function(classname) {
-			var classes = [];
-			each(this, function(i, elem) {
-				if (core.isElement(elem)) {
-					if (core.isString(classname)) {
-						classes = trim(classname).split(' ');
-					} else if (core.isArray(prop)) {
-						classes = classname;
-					}
-					if (classes.length > 0) {
-						var elemClass = ' ' + trim(elem.className) + ' ';
-						each(classname, function() {
-							elemClass = elemClass.replace(new RegExp(' ' + this + ' '), ' ');
-						});
-						elemClass = trim(elemClass);
-						if (!elemClass) {
-							elem.removeAttribute('class');
-						} else {
-							elem.className = elemClass;
-						}
-					}
-				}
-			});
-			return this;
-		},
-		// - .attr(attr[, value])
-		// Get the value of an attribute for the first element in the set of matched elements or set one or more attributes for every matched element.
-		// @param {String} attr The name of the attribute to set.
-		// @param {String} attr The name of the attribute to get.
-		// @param {Array} attr A set of attribute to get.
-		// @param {Object} attr An object of attribute-value pairs to set.
-		// @param {String|Number|Boolean} value The value of the attribute to set.
-		// @return {jetObject|String|Boolean|PlainObject}
-		// - 
-		attr: function(attr, value) {
-			var elem, returns = {},
-				self = this;
-			if (core.isPlainObject(attr)) {
-				each(attr, function(attribute, val) {
-					self.attr(attribute, val);
-				});
-			} else if (core.isArray(attr)) {
-				elem = this[0];
-				if (elem) {
-					each(attr, function(i, attribute) {
-						returns[attribute] = self.attr(attribute);
-					});
-				}
-				return returns;
-			} else {
-				if (core.isDefined(value)) {
-					each(this, function() {
-						var setValue = '';
-						setValue = (core.isFunction(value)) ? value.call(this, jet(this).attr(attr)) : value;
-						if (this.setAttribute) {
-							this.setAttribute(attr, setValue);
-						} else {
-							this[attrmap[attr.toLowerCase()] || attr] = setValue;
-						}
-					});
-				} else {
-					elem = this[0];
-					if (elem) {
-						return (core.isIE || !elem.getAttribute) ? elem[attrmap[attr.toLowerCase()] || attr] : elem.getAttribute(attr, 2);
-					}
-					return null;
-				}
-			}
-			return this;
-		},
-		// - .removeAttr(attr)
-		// Remove one or more attributes from each element in the set of matched elements.
-		// @param {String} attr The name of the attribute that will be removed.
-		// @return {jetObject}
-		// - 
-		removeAttr: function(attr) {
-			each(this, function() {
-				if (this.removeAttribute) {
-					this.removeAttribute(attr);
-				}
-			});
-			return this;
-		},
-		// - .html([value])
-		// Get the innerHTML content of first element of orthe set of matched elements set the innerHTML content from each element in the set of matched elements.
-		// @param {String} value The content of the element to set.
-		// @param {Function} value A function returning the value to set.
-		// @return {jetObject}
-		// - 
-		html: function(value) {
-			var elem;
-			if (core.isDefined(value)) {
-				each(this, function() {
-					this.innerHTML = (core.isFunction(value)) ? value.call(this, this.innerHTML) : value;
-				});
-				return this;
-			} else {
-				elem = this[0];
-				if (core.isElement(elem)) {
-					return elem.innerHTML;
-				}
-				return '';
-			}
-		}
-	});
-
-	function getStyle(element, prop, value) {
-		var target, original;
-		if (!element) return 0;
-		original = element.css(prop);
-		if (!core.isDefined(value)) {
-			target = parseFloat(original);
-		} else {
-			element.css(prop, value);
-			target = parseFloat(element.css(prop));
-			element.css(prop, original);
-		}
-		return isNaN(target) || target === 'auto' ? 0 : target;
-	}
-
-	// jet Color Object
-	function jColor(value) {
-		var self = {
-			R: 0,
-			G: 0,
-			B: 0,
-			A: 255,
-			subtract: function (value) {
-				var color = jColor(value);
-				each(['R', 'G', 'B'], function () {
-					self[this] -= color[this];
-					if (self[this] <= 0) self[this] = 0;
-				});
-				return self;
-			},
-			mix: function (value) {
-				var color = jColor(value);
-				each(['R', 'G', 'B'], function () {
-					self[this] += color[this];
-					if (self[this] > 255) self[this] = 255;
-				});
-				return self;
-			},
-			diff: function (value, percentage) {
-				var target = clone(value);
-
-				percentage = parseFloat(percentage);
-				percentage = (percentage > 1) ? 1 : percentage;
-
-				each(['R', 'G', 'B'], function () {
-					if (self[this] > target[this]) {
-						target[this] = self[this] - Math.ceil((self[this] - target[this]) * percentage);
-					} else {
-						target[this] = self[this] + Math.ceil((target[this] - self[this]) * percentage);
-					}
-				});
-				return target;
-			},
-			toHex: function () {
-				var hex = '', self = this;
-				each(['R', 'G', 'B'], function () {
-					hex += ((self[this] < 16) ? '0' : '') + self[this].toString(16);
-				});
-				return '#' + hex;
-			},
-			toFullHex: function () {
-				var hex = '';
-				each(['R', 'G', 'B', 'A'], function () {
-					hex += ((self[this] < 16) ? '0' : '') + self[this].toString(16);
-				});
-				return '#' + hex;
-			}
-		};
-		if (jet.isString(value)) {
-			if (regex.colorRegex.test(value) || regex.hexRegex.test(value)) {
-				if (matches = regex.hexRegex.exec(jet.trim(value))) {
-					self.R = parseInt(matches[1], 16);
-					self.G = parseInt(matches[2], 16);
-					self.B = parseInt(matches[3], 16);
-					if (matches[4]) {
-						self.A = parseInt(matches[4], 16);
-					}
-				} else if (matches = regex.colorRegex.exec(jet.trim(value))) {
-					self.R = parseInt(matches[1], 10);
-					self.G = parseInt(matches[2], 10);
-					self.B = parseInt(matches[3], 10);
-				}
-			}
-		}
-		return self;
-	};
-	
-	// jet Unit
-	function jUnit(elem, prop) {
-		var value, color, cssNumber = {
-			'columnCount': true,
-			'fillOpacity': true,
-			'fontWeight': true,
-			'lineHeight': true,
-			'opacity': true,
-			'order': true,
-			'orphans': true,
-			'widows': true,
-			'zIndex': true,
-			'zoom': true
-		},
-			self = {
-				element: null,
-				diff: null,
-				pixel: 0,
-				property: '',
-				parentPx: null,
-				parseDiff: function(value) {
-					if (jHooks.unit[this.property] && jHooks.unit[this.property].parseDiff) {
-						return jHooks.unit[this.property].parseDiff.call(this, value);
-					}
-					this.diff = getStyle(this.element, this.property, value) - this.pixel;
-
-					return this;
-				},
-				take: function(percentage) {
-					if (jHooks.unit[this.property] && jHooks.unit[this.property].take) {
-						return jHooks.unit[this.property].take.call(this, percentage);
-					}
-					return (this.pixel + (this.diff * percentage)) + ((!cssNumber[this.property]) ? 'px' : '');
-				}
-			};
-		if (elem.length && core.isDefined(prop)) {
-			self.property = prop;
-			self.element = elem;
-			if (jHooks.unit[prop] && jHooks.unit[prop].init) {
-				jHooks.unit[prop].init.call(self, value, elem);
-			} else {
-				self.pixel = getStyle(elem, prop);
-			}
-		}
-		return self;
-	};
-	// Animation
-
-	function jAnimate(element) {
-		// Reset reference object
-		var queue = [],
-			unit = {},
-			onPlaying = false,
-			environmentFPS = 60,
-			speed = 1,
-			jetObj,
-			// Easing Type
-			easingType = {
-				linear: function(percent) {
-					return percent;
-				},
-				swing: function(percent) {
-					return 0.5 - Math.cos(percent * Math.PI) / 2;
-				},
-				easingIn: function(percent) {
-					return (1 - (Math.cos((percent / 2) * Math.PI)));
-				},
-				easingOut: function(percent) {
-					return (Math.cos(((1 - percent) / 2) * Math.PI));
-				}
-			},
-			acceptedProp = /^scroll(Left|Top)|width|height|left|top|right|bottom|opacity|fontSize|color|backgroundColor|border((Left|Right|Top|Bottom)?Width)|lineHeight|padding(Left|Right|Top|Bottom)?|margin(Left|Right|Top|Bottom)?|zoom$/,
-			self = {
-				apply: function(css, duration, easing, callback) {
-					var index, values = {},
-						porperty;
-					if (core.isPlainObject(css)) {
-						for (index in css) {
-							if (jHooks.css[index]) {
-								values[index] = jHooks.css[index](element, index);
-							} else if (acceptedProp.test(core.camelCase(index))) {
-								values[index] = css[index];
-							}
-						}
-						porperty = {
-							to: values,
-							progress: 0,
-							frames: Math.ceil(duration / (1000 / environmentFPS)),
-							step: null,
-							complete: null,
-							easing: easing
-						};
-						if (core.isPlainObject(callback)) {
-							if (core.isFunction(callback.step)) {
-								porperty.step = callback.step;
-							}
-							if (core.isFunction(callback.complete)) {
-								porperty.complete = callback.complete;
-							}
-						} else if (core.isFunction(callback)) {
-							porperty.complete = callback;
-						}
-						queue.push(porperty);
-					}
-					return this;
-				},
-				play: function() {
-					if (!onPlaying) {
-						onPlaying = true;
-						setTimeout(function() {
-							var index, pc;
-							if (queue.length) {
-								if (queue[0].progress === queue[0].frames) {
-									for (index in queue[0].to) {
-										jetObj.css(index, queue[0].to[index]);
-									}
-									unit = {};
-									if (queue[0].complete) queue[0].complete.call(jetObj[0]);
-									queue = queue.slice(1);
-									if (!queue.length) {
-										onPlaying = false;
-										return;
-									}
-								} else {
-									if (queue[0].progress === 0) {
-										// Start new queue, and setup
-										for (index in queue[0].to) {
-											unit[index] = jUnit(jetObj, index);
-											unit[index].parseDiff(queue[0].to[index]);
-										}
-									} else {
-										if (!core.isEmpty(queue[0].to)) {
-											for (index in queue[0].to) {
-												pc = (easingType[queue[0].easing] || easingType.linear)(queue[0].progress / (queue[0].frames || 1));
-												jetObj.css(index, unit[index].take(pc));
-											}
-										}
-									}
-									if (queue[0].step) queue[0].step.call(elem);
-									queue[0].progress++;
-								}
-								if (onPlaying) {
-									setTimeout(arguments.callee, Math.ceil(1000 / (environmentFPS * speed)) || 1);
-								}
-							} else {
-								onPlaying = false;
-							}
-						});
-					}
-					return this;
-				},
-				wait: function(duration, callback) {
-					return this.apply({}, duration, 'linear', callback);
-				},
-				pause: function() {
-					onPlaying = false;
-					return this;
-				},
-				clear: function() {
-					this.pause();
-					queue = [];
-					return this;
-				}
-			};
-		if (core.isElement(element)) {
-			jetObj = jet(element);
-		}
-		return self;
-	};
-	extend(jetObject.prototype, {
-		// Animate
-		// - .animate(cssObj[, duration, easing, callback])
-		// Perform a custom animation of a set of CSS properties.
-		// @param {PlainObject} cssObj The plain object with CSS property and value.
-		// @param {Number} duration The number of duration, in millisecond.
-		// @param {String} easing The string of easing type, it can be 'linear', 'swing', 'easingIn' or 'easingOut'.
-		// @param {PlainObject} callback The plain object of callback function.
-		// @param {Function} obj.step The callback function that will be executed in each tick.
-		// @param {Function} obj.complete The callback function that will be executed when the animate is completed.
-		// @return {jetObject}
-		// - 
-		animate: function(cssObj, duration, easing, callback) {
-			var element = this[0];
-			if (core.isElement(element)) {
-				duration = parseInt(duration) || 400;
-				if (!core.isPlainObject(cssObj)) {
-					return this;
-				}
-				if (!element.jAnimate) {
-					element.jAnimate = jAnimate(element);
-				}
-				element.jAnimate.apply(cssObj, duration, easing, callback);
-				element.jAnimate.play();
-			}
-			return this;
-		},
-		// - .wait(callback)
-		// Wait a specified period of time for next animation
-		// @param {Number} duration The number of duration, in millisecond.
-		// @param {Function} callback The callback function that will be executed when the wait timer is expired.
-		// @return {jetObject}
-		// - 
-		wait: function(duration, callback) {
-			var element = this[0];
-			if (core.isElement(element)) {
-				duration = parseInt(duration) || 400;
-				if (!element.jAnimate) {
-					element.jAnimate = jAnimate(element);
-				}
-				element.jAnimate.wait(duration, callback);
-				element.jAnimate.play();
-			}
-			return this;
-		},
-		// - .abort()
-		// Stop the animation and clear all animation queue
-		// @return {jetObject}
-		// @added 1.0.6-Beta
-		// - 
-		abort: function() {
-			var element = this[0];
-			if (element.jAnimate) {
-				element.jAnimate.clear();
-			}
-			return this;
-		}
-	});
-	// DateTime class
-	jet.extend({
-		DateTime: function(value) {
-			var date = null,
-				year = 0,
-				month = 0,
-				day = 0,
-				time = {},
-				monthString = {
-					0: 'January',
-					1: 'February',
-					2: 'March',
-					3: 'April',
-					4: 'May',
-					5: 'June',
-					6: 'July',
-					7: 'August',
-					8: 'September',
-					9: 'October',
-					10: 'November',
-					11: 'December'
-				},
-				monthMap = {
-					'Jan': 0,
-					'Feb': 1,
-					'Mar': 2,
-					'Apr': 3,
-					'May': 4,
-					'Jun': 5,
-					'Jul': 6,
-					'Aug': 7,
-					'Sep': 8,
-					'Oct': 9,
-					'Nov': 10,
-					'Dec': 11
-				},
-				weekdayString = {
-					0: 'Sunday',
-					1: 'Monday',
-					2: 'Theuday',
-					3: 'Wednesday',
-					4: 'Thursday',
-					5: 'Friday',
-					6: 'Saturday'
-				},
-				weekdayMap = {
-					Sun: 1,
-					Mon: 2,
-					The: 3,
-					Wed: 4,
-					Thu: 5,
-					Fri: 6,
-					Sat: 7
-				},
-
-				self = {
-					parseTime: function(value) {
-						var delimited, subValue;
-						time = {
-							hour: 0,
-							minute: 0,
-							second: 0,
-							millis: 0
-						};
-
-						if (value) {
-							delimited = value.split(':');
-							if (delimited.length === 3) {
-								time.hour = parseInt(delimited[0]);
-								time.minute = parseInt(delimited[1]);
-								if (delimited[2].indexOf('.') !== -1) {
-									subValue = delimited[2].split('.');
-									time.second = parseInt(subValue[0]);
-									time.millis = parseInt(subValue[1]);
-								} else {
-									time.second = parseInt(delimited[2]);
-									time.millis = 0;
-								}
-							}
-						}
-						return self;
-					},
-					parseDate: function(value) {
-						var dateString, delimited, subValue;
-						if (core.isNumeric(value)) {
-							return self.parseDate(new Date(value));
-						} else if (core.isFunction(value.getFullYear)) {
-							date = value;
-							dateReset();
-							return self;
-						} else if (matches = regex.timestamp.exec(value)) {
-							// 2014-03-25T08:48:21Z or 2014-03-25T08:48:21+08:00
-							year = parseInt(matches[1]);
-							month = parseInt(matches[2]) - 1;
-							day = parseInt(matches[3]);
-							time = {
-								hour: parseInt(matches[4]),
-								minute: parseInt(matches[5]),
-								second: parseInt(matches[6]),
-								millis: 0
-							};
-						} else if (core.isString(value)) {
-							dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
-							delimited = dateString.split(' ');
-							switch (delimited.length) {
-							case 1:
-								// 2014-03-25 date only
-								if (delimited[0].indexOf('/') !== -1) {
-									subValue = delimited[0].split('/');
-								} else {
-									subValue = delimited[0].split('-');
-								}
-								month = parseInt(subValue[1]) - 1;
-								day = parseInt(subValue[2]);
-								year = parseInt(subValue[0]);
-								self.parseTime();
-								break;
-							case 3:
-								// 2014-03-25 08:48:21.125 or 2014/03/25 08:48:21.125
-								if (delimited[0].indexOf('/') !== -1) {
-									subValue = delimited[0].split('/');
-								} else {
-									subValue = delimited[0].split('-');
-								}
-								month = parseInt(subValue[1]) - 1;
-								day = parseInt(subValue[2]);
-								year = parseInt(subValue[1]);
-								self.parseTime(delimited[1]);
-								break;
-							case 6:
-								// Tue Mar 25 2014 08:48:21 GMT+0800
-								month = monthMap[delimited[1]] || '';
-								day = parseInt(delimited[2]);
-								year = parseInt(delimited[3]);
-								self.parseTime(delimited[4]);
-								break;
-							default:
-								// Not matched
-							}
-						}
-						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
-						// Reset the date to current time if date object is invalid
-						if (isNaN(date.getTime())) {
-							date = new Date();
-							dateReset();
-						}
-						return self;
-					},
-					getFirstDate: function() {
-						return new Date(year, month, 1, 0, 0, 0, 0);
-					},
-					getLastDate: function() {
-						var date = 30;
-						if (month % 7 % 2 == 0) {
-							date = 31;
-						} else if (month == 1) {
-							date = (year % 4 == 0) ? 29 : 28;
-						}
-						return new Date(year, month, date, 23, 59, 59, 0);
-					},
-					value: function() {
-						return date;
-					},
-					getDateTime: function() {
-						return {
-							year: year,
-							month: month,
-							day: day,
-							time: time
-						};	
-					},
-					setYear: function(value) {
-						year = parseInt(value);
-						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
-
-						return self;
-					},
-					setMonth: function(value) {
-						month = (core.isDefined(monthMap[value])) ? monthMap[value] : parseInt(value);
-						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
-
-						return self;
-					},
-					setDay: function(value) {
-						day = parseInt(value);
-						date = new Date(year, month, day, time.hour, time.minute, time.second, time.millis);
-
-						return self;
-					},
-					addDay: function(value) {
-						value = parseInt(value);
-						date = new Date(year, month, day + value, time.hour, time.minute, time.second, time.millis);
-						dateReset();
-
-						return self;
-					},
-					toString: function(format) {
-						var regexmap = {
-							'yyyy': [false, date.getFullYear()],
-							'yyy': [false, date.getFullYear()],
-							'yy': [true, 'yyyy'],
-							'y': [true, 'yyyy'],
-							'MMMM': [false, monthString[date.getMonth()]],
-							'MMM': [false, monthString[date.getMonth()].substring(0, 3)],
-							'MM': [false, date.getMonth() + 1],
-							'M': [true, 'MM'],
-							'dddd': [false, weekdayString[date.getDay()]],
-							'ddd': [true, 'dddd'],
-							'dd': [false, date.getDate()],
-							'd': [true, 'd'],
-							'hh': [false, date.getHours()],
-							'h': [true, 'hh'],
-							'HH': [false, date.getHours() % 12],
-							'H': [true, 'HH'],
-							'mm': [false, date.getMinutes()],
-							'm': [true, 'mm'],
-							'ss': [false, date.getSeconds()],
-							's': [true, 'ss'],
-							'tt': [false, (date.getHours() >= 12) ? 'PM' : 'AM'],
-							't': [false, (date.getHours() >= 12) ? 'P' : 'A'],
-							'q': [false, Math.floor((date.getMonth() + 3) / 3)],
-							'f': [false, date.getMilliseconds()]
-						};
-						return format.replace(regex.dateformat, function(str, pattern, offset, org) {
-							var value;
-							if (regexmap[pattern]) {
-								if (regexmap[pattern][0]) {
-									return regexmap[regexmap[pattern][1]][1];
-								} else {
-									value = regexmap[pattern][1];
-									return (pattern.length === 1 || !core.isNumeric(value)) ? value : (new Array(pattern.length + 1).join('0') + value).substr((value + '').length);
-								}
-							}
-							return pattern;
-						});
-					}
-				};
-
-				function dateReset() {
-					year = date.getFullYear();
-					month = date.getMonth();
-					day = date.getDate();
-					time = {
-						hour: date.getHours(),
-						minute: date.getMinutes(),
-						second: date.getSeconds(),
-						millis: date.getMilliseconds()
-					};
-				}
-			self.parseDate(value);
-			return self;
-		}
-	});
-	// jDeferred Callback Stack object
-
-	function Stack(options) {
-		var queue = [],
-			cachedOptions = {},
-			delimited = null,
-			memory = null,
-			self = {
-				add: function() {
-					var index = 0,
-						length = arguments.length;
-					for (; index < length; index++) {
-						if (core.isFunction(arguments[index]) && (!cachedOptions.unique || !core.inArray(queue, arguments[index]))) {
-							if (memory) {
-								arguments[index].apply(this, memory);
-							} else {
-								queue.push(arguments[index]);
-							}
-						} else if (core.isArray(arguments[index])) {
-							self.add.apply(this, arguments[index]);
-						}
-					}
-					return this;
-				},
-				remove: function() {},
-				fire: function() {
-					self.fireWith(this, arguments);
-					return this;
-				},
-				fireWith: function(reference, args) {
-					var index = 0,
-						callback;
-					memory = args || [];
-					memory = (memory.slice) ? memory.slice() : memory;
-					if (!cachedOptions.stack) {
-						while (callback = queue[index++]) {
-							callback.apply(reference, memory);
-						}
-					} else if (cachedOptions.stack) {
-						while (queue.length) {
-							queue.shift().apply(reference, memory);
-						}
-					}
-					return this;
-				},
-				above: function() {
-					queue = [];
-					return this;
-				}
-			};
-		if (core.isString(options)) {
-			delimited = options.split(' ');
-			each(delimited, function() {
-				cachedOptions[this] = true;
-			});
-		}
-		if (cachedOptions.each) {
-			stack = core.clone(queue);
-		}
-		return self;
-	};
-	// Define Deferred class
-	jet.extend({
-		// - jet.Deferred(obj)
-		// Create defer uses to invoke callbacks in queue or relay the success or failure state of any synchronous or asynchronous function.
-		// @param {jDeferred} obj Extend the current jDeferred object to new jDeferred object
-		// @param {Function} obj The callback function that will be execute after deferred
-		// @return {jDeferred}
-		// @added 1.0.4-Beta
-		// - 
-		Deferred: function(object) {
-			var actions = [
-				['done', 'resolve', Stack('stack')],
-				['fail', 'reject', Stack('stack')],
-				['step', 'process', Stack('')]
-			],
-				detached = {
-					always: function() {
-						deferred.done(arguments).fail(arguments).step(arguments);
-						return this;
-					},
-					then: function( /* done, fail, step */ ) {
-						var args = arguments;
-						return jet.Deferred(function(ref) {
-							core.each(actions, function(i, action) {
-								deferred[action[0]](function() {
-									var result = args[i] && args[i].apply(this, arguments);
-									if (result && core.isFunction(result.detach)) {
-										// If callback returns deferred object, queue the current deferred object
-										result.detach().done(ref.resolve).fail(ref.reject).step(ref.process);
-									} else {
-										ref.resolveWith(ref.detach, result);
-									}
-								});
-							});
-						}).detach();
-					},
-					detach: function(object) {
-						return (object != null) ? extend(object, this) : detached;
-					}
-				},
-				deferred = {};
-			each(actions, function() {
-				detached[this[0]] = this[2].add;
-				// Only non-detach deferred object can be fired.
-				deferred[this[1]] = this[2].fire;
-				deferred[this[1] + 'With'] = this[2].fireWith;
-			});
-			// If detached
-			// > done, fail, notify, always, then, detach, resolve, resolveWith, reject and rejectWith
-			// else
-			// > done, fail, notify, always, then, detach
-			detached.detach(deferred);
-			if (core.isFunction(object)) {
-				object.call(deferred, deferred);
-			}
-			return deferred;
-		},
-		// - jet.when()
-		// Provides a way to execute callback functions based on one or more objects, usually Deferred objects that represent asynchronous events.
-		// @return {jDeferred}
-		// @added 1.0.4-Beta
-		// - 
-		when: function() {
-			var deferred = jet.Deferred(),
-				valuesSet = [
-				// Resolve
-				Array.prototype.slice.call(arguments)],
-				length = valuesSet[0].length,
-				deferredSet = [
-				// Resolve
-				new Array(length),
-				// Process
-				new Array(length)],
-				remaining = length;
-			// Process Values
-			valuesSet.push(new Array(length));
-			each(valuesSet[0], function(i, def) {
-				if (def !== null && core.isFunction(def.detach)) { // Check object is deferred object
-					each(['done', 'step'], function(set, method) {
-						def[method](function(values) {
-							deferredSet[set][i] = def;
-							valuesSet[set][i] = (arguments.length > 1) ? slice.call(arguments) : values;
-							if (set) {
-								deferred.processWith(deferredSet[set], valuesSet[set]);
-							} else if (!(--remaining)) {
-								deferred.resolveWith(deferredSet[set], valuesSet[set]);
-							}
-						});
-					});
-					def.fail(deferred.reject);
-				} else {
-					remaining--;
-				}
-			});
-			// No more deferred object need resolve, resolve the main deferred object
-			if (!remaining) {
-				deferred.resolveWith(resolveDeferred, resolveValues);
-			}
-			return deferred.detach();
-		}
-	});
-	// Register css: Hooks
-	each('scrollTop scrollLeft'.split(' '), function(method, css) {
-		jet.developer(function() {
-			this.registerCSSHook(css, function(elements, prop, value) {
-				return jet(elements).prop(prop, value);
-			});
-		});
-	});
-	//	register Value: Hooks
-	jet.developer(function() {
-		this.registerValueHook('select', function(element, value) {
-			var returns = [];
-
-			if (core.isDefined(value)) {
-				value = (!core.isArray(value)) ? [value] : value;
-				each(element.options, function() {
-					this.selected = core.inArray(value, this.value);
-				});
-				// Trigger Change event
-				jet(element).change();
-
-				return this;
-			} else {
-				if (element.multiple) {
-					each(element.options, function() {
-						if (this.selected && !this.disabled && (!core.nodeName(this.parentNode, 'optgroup') || !this.parentNode.disabled)) {
-							returns.push(this.value);
-						}
-					});
-					return returns;
-				} else {
-					return element.options[element.selectedIndex].value;
-				}
-			}
-		});
-	});
-	each('checkbox radio'.split(' '), function(i, type) {
-		jet.developer(function() {
-			this.registerValueHook(type, function(element, value) {
-				var name = element.name, values;
-				
-				if (core.isDefined(value)) {
-					if (core.isString(value)) {
-						value = [value];
-					}
-					if (core.inArray(value, element.value)) {
-						jet(element).attr('checked', 'checked');
-					} else {
-						jet(element).removeAttr('checked');
-					}
-
-					// Trigger Change event
-					jet(element).change();
-
-					return this;
-				} else {
-					if (element.type == 'radio') {
-						values = jet('input[name="' + name + '"]:checked').attr('value');
-						return values || 'on';
-					} else {
-						return element.value || 'on';
-					}
-					return null;
-				}
-			});
-		});
-	});
-	// Register jUnit Hooks
-	each('backgroundColor color'.split(' '), function(i, prop) {
-		jet.developer(function() {
-			this.registerUnitHook(prop, {
-				take: function(percentage) {
-					return this.pixel.diff(this.diff, percentage).toHex();
-				},
-				parseDiff: function(value) {
-					this.diff = jColor(value);
-					return this;
-				},
-				init: function(value, element) {
-					this.pixel = jColor(value);
-					return this;
-				}
-			});
-		});
-	});
-	each('padding margin'.split(' '), function(i, prop) {
-		jet.developer(function() {
-			this.registerUnitHook(prop, {
-				take: function(percentage) {
-					var ref = this,
-						val = new Array(4);
-					each(this.pixel, function(i, value) {
-						val[i] = (ref.pixel[i] + (ref.diff[i] * percentage)) + 'px';
-					});
-					return val.join(' ');
-				},
-				init: function(value, element) {
-					var valueSet, ref = this;
-					this.pixel = new Array(4);
-					this.diff = new Array(4);
-					each('top right bottom left'.split(' '), function(i, side) {
-						ref.pixel[i] = parseFloat(element.css(prop + '-' + side));
-					});
-					return this;
-				},
-				parseDiff: function(value) {
-					var valueSet = value.split(' '),
-						ref = this;
-					each('top right bottom left'.split(' '), function(i, side) {
-						var pos = (valueSet.length === 1) ? 0 : (valueSet.length === 2) ? 2 : i;
-						ref.diff[i] = getStyle(ref.element, prop + '-' + side, valueSet[pos]) - ref.pixel[i];
-					});
-					return this;
-				}
-			});
-		});
-	});
-	jet.developer(function() {
-		each('height width'.split(' '), function(i, prop) {
-			core.registerUnitHook(prop, {
-				init: function(value, element) {
-					this.pixel = getStyle(element, prop);
-
-					if (isNaN(this.pixel)) this.pixel = element.boxRect()[prop];
-					return this;
-				}
-			});
-		});
-	});
-	// Bind DOM ready event
-	(function() {
-		var top;
-		// Fire queued onload event
-
-		function fire() {
-			var index = 0,
-				callback;
-			while (callback = onLoadEvent[index++]) {
-				callback.call(this);
-			}
 			onLoadEvent = [];
 		}
-		// DOM Ready on post load
-		if (doc.readyState === 'complete') {
-			setTimeout(fire);
+	}
+
+	// DOM Ready on post load
+	if (doc.readyState === 'complete') {
+		setTimeout(triggerOnLoad);
+	} else {
+		// Setup DOM Ready Event
+		if (win.addEventListener) {
+			doc.addEventListener('DOMContentLoaded', triggerOnLoad, false);
 		} else {
-			// Setup DOM Ready Event
-			if (win.addEventListener) {
-				doc.addEventListener('DOMContentLoaded', function() {
-					fire();
-				}, false);
-			} else {
-				top = null;
-				try {
-					top = win.frameElement === null && doc.documentElement;
-				} catch (e) {}
-				if (top && top.doScroll) {
-					(function poll() {
-						if (onLoadEvent.length) {
-							try {
-								top.doScroll('left');
-							} catch (e) {
-								return setTimeout(poll, 50);
-							}
-							fire();
+			var top = !win.frameElement && doc.documentElement;
+			// If the top view can be scrolled, trigger onLoadEvent
+			if (top && top.doScroll) {
+				(function poll() {
+					if (onLoadEvent.length) {
+						try {
+							top.doScroll('left');
+						} catch (e) {
+							// Re-call until doScroll is work
+							return setTimeout(poll, 50);
 						}
-					})();
-				}
-				doc.onreadystatechange = function() {
-					if (doc.readyState === 'complete') {
-						doc.onreadystatechange = null;
-						fire();
+						triggerOnLoad();
 					}
-				};
+				})();
 			}
-			win.onload = function() {
-				fire();
-				win.onload = null;
+
+			doc.onreadystatechange = function() {
+				if (doc.readyState === 'complete') {
+					doc.onreadystatechange = null;
+					triggerOnLoad();
+				}
 			};
 		}
-	})();
-	win.jet = jet;
-})();
+
+		win.onload = function() {
+			triggerOnLoad();
+			win.onload = null;
+		};
+	}
+
+	var variableBinding = fn.parseQuery(queryString)['v'] || 'Jet';
+
+	if (global[variableBinding]) {
+		conflict = global[variableBinding];
+	}
+	global[variableBinding] = Jet;
+})((typeof window !== 'undefined') ? window : this);
