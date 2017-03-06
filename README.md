@@ -12,6 +12,7 @@ Installation and Configuration
 2. Put insert the following script tag inside <html>
 ```html
 <script type="text/javascript" src="{path of jet.js}"></script>
+```
 
 Documentation (Still writing)
 --------------------------------------
