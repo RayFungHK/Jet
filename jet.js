@@ -13,12 +13,12 @@
 		some = ary.some,
 		toString = Object.prototype.toString,
 		fnToString = Function.prototype.toString,
-		container = doc.createElement('div'),
 		Jet, fn,
 		onLoadEvent = [],
 		onHold = false,
 		conflict = null,
 		styles = win.getComputedStyle(docElem, ''),
+		container = doc.createElement('div'),
 		allType = '*/'.concat('*'),
 		eventBindmap = {
 			'DOMContentLoaded': 'onload'
@@ -26,6 +26,12 @@
 		propBindmap = {
 			'for': 'htmlFor',
 			'class': 'className'
+		},
+		wrapMap = {
+			'thead': [1, '<table>', '</table>'],
+			'col': [2, '<table><colgroup>', '</colgroup></table>'],
+			'tr': [2, '<table><tbody>', '</tbody></table>'],
+			'td': [3, '<table><tbody><tr>', '</tr></tbody></table>']
 		},
 		attrBindmap = {
 			'accesskey': 'accessKey',
@@ -40,19 +46,21 @@
 			'cellspacing': 'cellSpacing',
 			'cellpadding': 'cellPadding'
 		},
-		resetAnimation = 'animation-duration animation-direction animation-timing-function animation-name animation-iteration-count animation-delay animation-fillmode',
-		easingType = '^(linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|cubic-bezier\\(-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?\\))$',
+		easingType = '(linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end|cubic-bezier\\(-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?,\\s?-?\\d*(?:\\.\\d+)?\\))',
 		transitionFormula = new RegExp('([\\w-]+)\\s(\\d*(?:\\.\\d+)?m?s)\\s' + easingType + '\\s(\\d*(?:\\.\\d+)?m?s),?', 'g'),
-		regexLength = '((\\\d+(?:\\\.\\\d+)?)\\\s*(em|ex|%|px|cm|mm|in|pt|pc|ch|rem|vh|vw|vmin|vmax))',
-		regexUnit = new RegExp('^\\\s*(?:' + regexLength + '|(auto))\\\s*$'),
+		regexUnit = /^\s*(?:(\d+(?:\.\d+)?)\s*(em|ex|%|px|cm|mm|in|pt|pc|ch|rem|vh|vw|vmin|vmax)|(auto))\s*$/,
 		regexCheckable = /^(checkbox|radio)$/i,
 		regexSubmitType = /^(submit|button|image|reset|file)$/i,
 		regexSubmitName = /^(input|select|textarea|keygen)$/i,
 		regexConstructor = /^\[object .+?Constructor\]$/,
 		regexNative = new RegExp('^' + String(toString).replace(/[.*+?^${}()|[\]\/\\]/g, '\\$&').replace(/toString|(function).*?(?=\\\()| for .+?(?=\\\])/g, '$1.*?') + '$'),
 		regexTimestamp = /([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})([+-][0-9]{2}:[0-9]{2}|Z)?/,
+		regexValidDateTime = /([0-9]{4})-([0-9]{2})-([0-9]{2})(\s([0-9]{2}):([0-9]{2}):([0-9]{2})(\.[0-9]{1,3})?)?/,
 		regexUTCGMT = /(UTC|GMT)([+-](?:\d+))?/,
-		regexTransformMethod = /^(css|backface|duration|delay|easing|rotate(X|Y|Z|3d)?|move(X|Y|Z|3d)?|scale(X|Y|Z|3d)?|skew(X|Y)?)$/
+		regexTransformMethod = /^(css|backface|duration|delay|easing|rotate(X|Y|Z|3d)?|move(X|Y|Z|3d)?|scale(X|Y|Z|3d)?|skew(X|Y)?)$/;
+
+	wrapMap.tbody = wrapMap.tfoot = wrapMap.colgroup = wrapMap.caption = wrapMap.thead;
+	wrapMap.th = wrapMap.td;
 
 	// Implement JetObject become an Array-Like object
 	JetObject.prototype = {
@@ -402,9 +410,24 @@
 		 * @return     {JetObject}  The Jet Object
 		 */
 		build: function(html, deep) {
-			var object = new JetObject();
-			container.innerHTML = html;
-			fn.each((deep) ? container.querySelectorAll('*') : container.children, function() {
+			var object = new JetObject(),
+					matches = (/<([\w:]+)/.exec(html)),
+					tagname = ((matches !== null) ? matches[1] : '').toLowerCase(),
+					wrap = wrapMap[tagname],
+					cont = container,
+					i = 0;
+
+			if (wrap) {
+				html = wrap[1] + html + wrap[2];
+			}
+
+			cont.innerHTML = html;
+			if (wrap) {
+				for (; i < wrap[0]; i++) {
+					cont = cont.firstChild;
+				}
+			}
+			fn.each((deep) ? cont.querySelectorAll('*') : cont.children, function() {
 				object.push(this.cloneNode(true));
 			});
 			container.innerHTML = '';
@@ -464,6 +487,317 @@
 		},
 		comparePosition: function(a, b) {
 			return a.compareDocumentPosition ? a.compareDocumentPosition(b) : a.contains ? (a != b && a.contains(b) && 16) + (a != b && b.contains(a) && 8) + (a.sourceIndex >= 0 && b.sourceIndex >= 0 ? (a.sourceIndex < b.sourceIndex && 4) + (a.sourceIndex > b.sourceIndex && 2) : 1) : 0;
+		},
+		/**
+		 * Jet Thread Object provides asynchronous
+		 *
+		 * @class      Thread (name)
+		 * @this       {Thread}
+		 * @param      {...(Function|Thread)}  [callback]  The function to be
+		 *                                               executed
+		 * @return     {Thread}                { description_of_the_return_value }
+		 */
+		Thread: function(callback) {
+			var context,
+				subThread = [],
+				taskQueue = [],
+				status = 'pending',
+				bindThread = function(thread) {
+					// If this element is a Jet Thread, put it to sub thread list
+					thread.wakeup = function() {
+						fn.each(subThread, function(key, val) {
+							if (val.getStatus() == 'completed') {
+								subThread.splice(key, 1);
+							}
+						});
+						finalize();
+					};
+					subThread.push(thread);
+				},
+				// Thread finalize action, trigger 'finally' handler when all task is done
+				finalize = function() {
+					if ((!taskQueue || taskQueue.length === 0) && (!subThread || subThread.length === 0) && pool.length > 0) {
+						if (trigger.finally) {
+							// If no more task in queue and the 'finally' handler was added, execute it
+							var results = [];
+							fn.each(pool, function() {
+								results.push(this.result);
+							});
+							trigger.finally.apply((fn.isDefined(context)) ? context : results, results);
+						}
+						// Clean the pool and reset the binded arguments
+						pool = [];
+						boundArgs = null;
+						status = 'completed';
+						// Wake the parent thread up
+						if (promise.wakeup) {
+							promise.wakeup();
+						}
+					}
+				},
+				promise = {
+					/**
+					 * Add handler to be called when the thread has finished all the
+					 * job. Rejected task will return null as result
+					 * @memberof   Thread
+					 *
+					 * @param      {Function}  callback  The callback function to execute
+					 *                                   when the thread has completed
+					 * @return     {Thread}    { description_of_the_return_value }
+					 */
+					finally: function(callback) {
+						if (fn.isCallable(callback)) {
+							trigger.finally = callback;
+							finalize();
+						}
+						return promise;
+					},
+
+					/**
+					 * Add new callback or Thread
+					 * @memberof   Thread
+					 *
+					 * @param      {Function}  callback  The callback function to
+					 *                                   execute, or other Thread to bind
+					 *                                   for
+					 * @return     {Thread}    { description_of_the_return_value }
+					 */
+					add: function(callback) {
+						if (promise.getStatus() !== 'complete') {
+							if (fn.isCallable(callback)) {
+								taskQueue.push(seal(callback));
+							} else if (callback.constructor == fn.Thread) {
+								bindThread(callback);
+							}
+						}
+						return promise;
+					},
+
+					/**
+					 * Return the status of thread in 'pending', 'running', 'running (on
+					 * hold)' and 'completed'
+					 * @memberof   Thread
+					 *
+					 * @return     {String}  The status.
+					 */
+					getStatus: function() {
+						return status;
+					}
+				},
+				boundArgs = null,
+				bypass = false,
+				trigger = {
+					done: null,
+					fail: null,
+					always: null,
+					finally: null
+				},
+				pool = [],
+				pump = function() {
+					(function callee(args) {
+						if (taskQueue && taskQueue.length) {
+							var task = taskQueue.shift();
+							if (!bypass) {
+								// Take the first job and execute it
+								task.apply(callee, args);
+							} else {
+								task.rejected = task.done = true;
+							}
+						} else {
+							// If no more task in queue, trigger finalize stage
+							finalize();
+						}
+					})(arguments);
+				},
+				seal = function(closure) {
+					// Seal the function into package
+					var sealed = function() {
+						var action = {
+							wait: function() {
+								// Pause the task
+								sealed.pause = true;
+								status = 'running (on hold)';
+								return action;
+							},
+							resume: function() {
+								// Resume the task, and trigger 'done' and 'always' handler
+								if (sealed.pause) {
+									sealed.pause = false;
+									status = 'running';
+									// If the task has marked as done, trigger 'done' handler
+									if (sealed.done) {
+										if (arguments.length > 0) {
+											sealed.result = slice.call(arguments);
+										}
+										if (!fn.isArray(sealed.result)) {
+											sealed.result = [sealed.result];
+										}
+										if (trigger.done) {
+											trigger.done.apply((fn.isDefined(context)) ? context : sealed.result, sealed.result);
+										}
+										// Roll the pump
+										pump.apply(this, boundArgs);
+									}
+									if (trigger.always) {
+										trigger.always.apply((fn.isDefined(context)) ? context : sealed);
+									}
+								}
+								return action;
+							},
+							reject: function() {
+								// Mark the task as rejected
+								sealed.rejected = true;
+								sealed.rejectedArg = arguments;
+								// Trigger 'fail' and 'always' handler
+								if (trigger.fail) {
+									trigger.fail.apply((fn.isDefined(context)) ? context : arguments);
+								}
+								if (trigger.always) {
+									trigger.always.apply((fn.isDefined(context)) ? context : sealed);
+								}
+								return action;
+							}
+						},
+						// Execute the task and get the result
+						result = closure.apply(action, arguments);
+
+						// Mark the sealed package has done
+						sealed.done = true;
+						// Add the sealed package to pool
+						pool.push(sealed);
+						// If the task is not rejected, put the result to the list for 'finally' handler
+						if (!sealed.rejected) {
+							sealed.result = result;
+							// If the task is not paused, trigger 'done' and 'always' handler
+							if (!sealed.pause) {
+								if (trigger.done) {
+									trigger.done.apply((fn.isDefined(context)) ? context : result, [result]);
+								}
+								if (trigger.always) {
+									trigger.always.apply((fn.isDefined(context)) ? context : sealed);
+								}
+							}
+						}
+						// If the task is not paused, pump next task
+						if (!sealed.pause) {
+							this.apply(this, [arguments]);
+						}
+					};
+					// Define the default property
+					sealed.done = false;
+					sealed.rejected = false;
+					sealed.result = null;
+					sealed.pause = false;
+					sealed.rejectedArg = null;
+					return sealed;
+				};
+			promise.constructor = fn.Thread;
+			fn.each('done fail always'.split(' '), function() {
+				var self = this;
+				/**
+				 * Add handlers to be called when the Thread object is resolved.
+				 *
+				 * @memberof   Thread
+				 * @name       done
+				 * @param      {Function}  callback  The callback function to execute
+				 *
+				 * @return     {Thread}    { description_of_the_return_value }
+				 */
+				/**
+				 * Add handlers to be called when the Thread object is rejected.
+				 *
+				 * @memberof   Thread
+				 * @name       reject
+				 * @param      {Function}  callback  The callback function to execute
+				 *
+				 * @return     {Thread}    { description_of_the_return_value }
+				 */
+				/**
+				 * Add handlers to be called when the Thread object is either
+				 * resolved or rejected.
+				 *
+				 * @memberof   Thread
+				 * @name       always
+				 * @param      {Function}  callback  The callback function to execute
+				 *
+				 * @return     {Thread}    { description_of_the_return_value }
+				 */
+				promise[self] = function(callback) {
+					if (fn.isCallable(callback)) {
+						// If always handler was added, exeute it either done or fail
+						if (self == 'always') {
+							fn.each(pool, function() {
+								if (this.done && !this.pause) {
+									callback.apply(this.result);
+								}
+							});
+							trigger.always = callback;
+						} else {
+							fn.each(pool, function() {
+								// If sealed closure has done and not paused, throw it to handler
+								if (this.done && !this.pause) {
+									// .fail() will be called if the job has rejected
+									// .done() will be called if the job has not rejected
+									if (!this.rejected && self == 'done') {
+										callback.apply(this.result);
+									} else if (this.rejected && self == 'fail') {
+										callback.apply(this.rejectedArg);
+									}
+								}
+							});
+							trigger[self] = callback;
+						}
+					}
+					return promise;
+				};
+			});
+			fn.each('resolve resolveWith'.split(' '), function() {
+				var self = this;
+				/**
+				 * Resolve a Thread object and call any doneCallbacks with the given
+				 * args.
+				 *
+				 * @memberof   Thread
+				 * @name       resolve
+				 * @param      {...Object}  [args]  Optional arguments that are
+				 *                                  passed to the doneCallbacks.
+				 *
+				 * @return     {Thread}     { description_of_the_return_value }
+				 */
+				/**
+				 * Resolve a Thread object and call any doneCallbacks with the given
+				 * args and refer the object as this.
+				 *
+				 * @memberof   Thread
+				 * @name       resolveWith
+				 * @param      {Object}     object  A object refer to doneCallbacks
+				 * @param      {...Object}  [args]  Optional arguments that are
+				 *                                  passed to the doneCallbacks.
+				 *
+				 * @return     {Thread}     { description_of_the_return_value }
+				 */
+				promise[self] = function() {
+					var args = slice.call(arguments);
+					if (!boundArgs) {
+						status = 'running';
+						if (self == 'resolveWith' && args.length) {
+							context = args.shift();
+						}
+						boundArgs = args;
+						pump.apply(promise, boundArgs);
+					}
+					return promise;
+				};
+			});
+			// Put all arguments to task list
+			fn.each(arguments, function() {
+				if (this.constructor == fn.Thread) {
+					bindThread(this);
+				} else if (fn.isCallable(this)) {
+					taskQueue.push(seal(this));
+				}
+			});
+			return promise;
 		},
 		/**
 		 * Create a serialized representation of an array, a plain object, or a
@@ -634,316 +968,6 @@
 		return 0;
 	})();
 
-	/**
-	 * Jet Thread Object provides asynchronous
-	 *
-	 * @class      Thread (name)
-	 * @this       {Thread}
-	 * @param      {...(Function|Thread)}  [callback]  The function to be
-	 *                                               executed
-	 * @return     {Thread}                { description_of_the_return_value }
-	 */
-	fn.Thread = function(callback) {
-		var context,
-			self = this,
-			status = 'pending',
-			queue = [],
-			pool = [],
-			results = [],
-			threadRunning = 0,
-			index = 0,
-			postProcess = {
-				done: null,
-				fail: null,
-				always: null,
-				finally: null
-			},
-			abort = false,
-			pump = function(arg) {
-				if (!abort) {
-					if (queue.length > 0) {
-						var exec = queue.shift();
-						exec(arg);
-					} else {
-						threadEnd();
-					}
-				}
-			},
-			threadEnd = function() {
-				if (queue.length == 0 && !threadRunning) {
-					if (postProcess.finally) {
-						postProcess.finally.apply(results, results);
-					}
-					if (fn.isCallable(promise.finalize)) {
-						promise.finalize(results);
-					}
-					status = 'completed';
-				}
-			},
-			promise = {
-				constructor: fn.Thread,
-				/**
-				 * Add handler to be called when the thread has finished all the
-				 * job. Rejected task will return null as result
-				 * @memberof   Thread
-				 *
-				 * @param      {Function}  callback  The callback function to execute
-				 *                                   when the thread has completed
-				 * @return     {Thread}    { description_of_the_return_value }
-				 */
-				finally: function(callback) {
-					if (fn.isCallable(callback)) {
-						postProcess.finally = callback;
-						threadEnd();
-					}
-					return promise;
-				},
-
-				/**
-				 * Add new callback or Thread to current Thread
-				 * @memberof   Thread
-				 *
-				 * @param      {Function}  callback  The callback function to
-				 *                                   execute, or other Thread to bind
-				 *                                   for
-				 * @return     {Thread}    { description_of_the_return_value }
-				 */
-				add: function(callback) {
-					if (promise.getStatus() !== 'complete') {
-						if (fn.isCallable(callback) || callback.constructor == fn.Thread) {
-							queue.push(ThreadExecution(callback));
-							if (callback.constructor == fn.Thread) {
-								threadRunning++;
-							}
-						}
-					}
-					return promise;
-				},
-
-				/**
-				 * Return the status of thread in 'pending', 'running', 'running (on
-				 * hold)' and 'completed'
-				 * @memberof   Thread
-				 *
-				 * @return     {String}  The status.
-				 */
-				getStatus: function() {
-					return status;
-				}
-			},
-			ThreadExecution = function(execution) {
-				var index = queue.length,
-					closure = function(args) {
-						action.arguments = args;
-						if (execution.constructor == fn.Thread) {
-							execution.finalize = function(threadResult) {
-								results[index] = threadResult;
-								threadRunning--;
-								threadEnd();
-							};
-							if (execution.getStatus() == 'completed') {
-								threadEnd();
-							}
-							pump(args);
-						} else {
-							closure.result = execution.call(action, args);
-							results[index] = closure.result;
-							closure.done = true;
-
-							if (!closure.paused) {
-								pump(args);
-								pool.push(closure);
-								if (postProcess.done) {
-									postProcess.done.call((fn.isDefined(context)) ? context : closure.result, closure.result);
-								}
-								if (postProcess.always) {
-									postProcess.always.call((fn.isDefined(context)) ? context : closure);
-								}
-							}
-						}
-					},
-					action = {
-						arguments: null,
-						/**
-						 * Abort the current thread, the remaining execution will not execute.
-						 * @memberof   ThreadExecution
-						 *
-						 * @return     {ThreadExecution}    { description_of_the_return_value }
-						 */
-						abort: function() {
-							abort = true;
-							status = 'thread aborted';
-							return action;
-						},
-						/**
-						 * Pause thread execution until "resume" has called
-						 * @memberof   ThreadExecution
-						 *
-						 * @return     {ThreadExecution}    { description_of_the_return_value }
-						 */
-						wait: function() {
-							// Pause the task
-							closure.paused = true;
-							status = 'waiting';
-							return action;
-						},
-						/**
-						 * Resume the thread execution and return the resolved result
-						 * @memberof   ThreadExecution
-						 *
-						 * @return     {ThreadExecution}    { description_of_the_return_value }
-						 */
-						resume: function() {
-							// Resume the task, and trigger 'done' and 'always' handler
-							if (closure.paused) {
-								closure.paused = false;
-								status = 'running';
-								// If the task has marked as done, trigger 'done' handler
-								if (closure.done) {
-									if (arguments.length > 0) {
-										closure.result = arguments[0];
-										results[index] = closure.result;
-									}
-									if (postProcess.done) {
-										postProcess.done.call((fn.isDefined(context)) ? context : closure.result, closure.result);
-									}
-									pump(action.arguments);
-								}
-								if (postProcess.always) {
-									postProcess.always.apply((fn.isDefined(context)) ? context : closure);
-								}
-							}
-							return action;
-						},
-						/**
-						 * Reject the thread execution
-						 * @memberof   ThreadExecution
-						 *
-						 * @return     {ThreadExecution}    { description_of_the_return_value }
-						 */
-						reject: function() {
-							// Mark the task as rejected
-							closure.rejected = true;
-							// Trigger 'fail' and 'always' handler
-							if (postProcess.fail) {
-								postProcess.fail.call((fn.isDefined(context)) ? context : closure);
-							}
-							if (postProcess.always) {
-								postProcess.always.call((fn.isDefined(context)) ? context : closure);
-							}
-							return action;
-						}
-					};
-				
-				closure.done = closure.paused = closure.rejected = false;
-				return closure;
-			};
-
-		fn.each('done fail always'.split(' '), function() {
-			var self = this;
-			/**
-			 * Add handlers to be called when the Thread object is resolved.
-			 *
-			 * @memberof   Thread
-			 * @name       done
-			 * @param      {Function}  callback  The callback function to execute
-			 *
-			 * @return     {Thread}    { description_of_the_return_value }
-			 */
-			/**
-			 * Add handlers to be called when the Thread object is rejected.
-			 *
-			 * @memberof   Thread
-			 * @name       fail
-			 * @param      {Function}  callback  The callback function to execute
-			 *
-			 * @return     {Thread}    { description_of_the_return_value }
-			 */
-			/**
-			 * Add handlers to be called when the Thread object is either
-			 * resolved or rejected.
-			 *
-			 * @memberof   Thread
-			 * @name       always
-			 * @param      {Function}  callback  The callback function to execute
-			 *
-			 * @return     {Thread}    { description_of_the_return_value }
-			 */
-			promise[self] = function(callback) {
-				if (fn.isCallable(callback)) {
-					// If always handler was added, exeute it either done or fail
-					if (self == 'always') {
-						fn.each(pool, function() {
-							if (this.done && !this.paused) {
-								callback.apply(this.result);
-							}
-						});
-						postProcess.always = callback;
-					} else {
-						fn.each(pool, function() {
-							// If sealed closure has done and not paused, throw it to handler
-							if (this.done && !this.paused) {
-								// .fail() will be called if the job has rejected
-								// .done() will be called if the job has not rejected
-								if (!this.rejected && self == 'done') {
-									callback.call((fn.isDefined(context)) ? context : this.result, this.result);
-								} else if (this.rejected && self == 'fail') {
-									callback((fn.isDefined(context)) ? context : callback);
-								}
-							}
-						});
-						postProcess[self] = callback;
-					}
-				}
-				return promise;
-			};
-		});
-		fn.each('resolve resolveWith'.split(' '), function() {
-			var self = this;
-			/**
-			 * Resolve a Thread object and call any doneCallbacks with the given
-			 * args.
-			 *
-			 * @memberof   Thread
-			 * @name       resolve
-			 * @param      {...Object}  [args]  Optional arguments that are
-			 *                                  passed to the doneCallbacks.
-			 *
-			 * @return     {Thread}     { description_of_the_return_value }
-			 */
-			/**
-			 * Resolve a Thread object and call any doneCallbacks with the given
-			 * args and refer the object as this.
-			 *
-			 * @memberof   Thread
-			 * @name       resolveWith
-			 * @param      {Object}     object  A object refer to doneCallbacks
-			 * @param      {...Object}  [args]  Optional arguments that are
-			 *                                  passed to the doneCallbacks.
-			 *
-			 * @return     {Thread}     { description_of_the_return_value }
-			 */
-			promise[self] = function() {
-				var args = slice.call(arguments);
-				if (status == 'pending') {
-					status = 'running';
-					if (self == 'resolveWith' && args.length) {
-						context = args.shift();
-					}
-					pump.apply(pump, args);
-				}
-				return promise;
-			};
-		});
-
-		if (arguments.length > 0) {
-			fn.each(slice.call(arguments), function() {
-				promise.add(this);
-			});
-		}
-
-		return promise;
-	};
 
 	/**
 	 * Representation of date and time.
@@ -1025,7 +1049,10 @@
 					}
 				} else if (fn.isString(value)) {
 					dateString = value.replace(/\s*\(.*\)$/, ''); // Remove '(string)' such as '(China Standard Time)' at the end of date string
-					dateDelimited = dateString.split(' ');
+					if (!regexValidDateTime.test(dateString)) {
+						return parse(Date.now());
+					}
+					dateDelimited = dateString.replace(/\s+/, '\s').split(' ');
 
 					if (dateDelimited.length == 1 || dateDelimited.length == 2) {
 						subValue = dateDelimited[0].split((dateDelimited[0].indexOf('/') !== -1) ? '/' : '-');
@@ -1112,7 +1139,7 @@
 				 * @return     {Date}  The frist day.
 				 */
 				getFristDay: function() {
-					return fn.DateTime(new Date(datetime.year, datetime.month, 1, 0, 0, 0, 0));
+					return new Date(datetime.year, datetime.month, 1, 0, 0, 0, 0);
 				},
 
 				/**
@@ -1128,7 +1155,7 @@
 					} else if (datetime.month == 1) {
 						dayOfEnd = (self.isLeapYear()) ? 29 : 28;
 					}
-					return fn.DateTime(new Date(datetime.year, datetime.month, dayOfEnd, 23, 59, 59, 0));
+					return new Date(datetime.year, datetime.month, dayOfEnd, 23, 59, 59, 0);
 				},
 
 				/**
@@ -1224,9 +1251,9 @@
 								y: ('0' + dateObject.getFullYear()).slice(-2),
 								a: (dateObject.getHours() >= 12) ? 'pm' : 'am',
 								A: (dateObject.getHours() >= 12) ? 'PM' : 'AM',
-								h: ('0' + (dateObject.getHours() % 12) + 1).slice(-2),
+								h: ('0' + (dateObject.getHours() % 12)).slice(-2),
 								H: ('0' + dateObject.getHours()).slice(-2),
-								g: (dateObject.getHours() % 12) + 1,
+								g: (dateObject.getHours() % 12),
 								G: dateObject.getHours(),
 								i: ('0' + dateObject.getMinutes()).slice(-2),
 								s: ('0' + dateObject.getSeconds()).slice(-2),
@@ -1248,10 +1275,10 @@
 								M: dateObject.getMonth() + 1,
 								dddd: weekdayString[dateObject.getDay()],
 								ddd: weekdayString[dateObject.getDay()].substring(0, 3),
-								dd: ('0' + (dateObject.getDay() + 1)).slice(-2),
-								d: dateObject.getDay(),
-								hh: ('0' + ((dateObject.getHours() % 12) + 1)).slice(-2),
-								h: (dateObject.getHours() % 12) + 1,
+								dd: ('0' + (dateObject.getDate())).slice(-2),
+								d: dateObject.getDate(),
+								hh: ('0' + ((dateObject.getHours() % 12))).slice(-2),
+								h: (dateObject.getHours() % 12),
 								HH: ('0' + dateObject.getHours()).slice(-2),
 								H: dateObject.getHours(),
 								mm: ('0' + dateObject.getMinutes()).slice(-2),
@@ -1465,7 +1492,7 @@
 	 *
 	 * @class      Keyframe (name)
 	 * @param      {String}    name    The animation name
-	 * @return     {Keyframe}  { description_of_the_return_value }
+	 * @return     {KeyFrame}  { description_of_the_return_value }
 	 */
 	fn.Keyframe = function(name) {
 		if (transformKeyframe === null) {
@@ -1544,71 +1571,6 @@
 					}
 					keyform.deleteRule(frame + '%');
 					return action;
-				},
-
-				/**
-				 * Apply the keyframe rule to matched elements
-				 *
-				 * @name       remove
-				 * @memberof   Keyframe
-				 *
-				 * @param      {String|DOMElement|JetObject}    object   A string of selector or matched elements
-				 * @param      {PlainObject}    setting   Animation setting
-				 * @return     {Keyframe}  { description_of_the_return_value }
-				 */
-				apply: function(object, setting) {
-					var jetObj;
-
-					if (!fn.isDefined(setting)) {
-						setting = {};
-					}
-
-					setting.duration = parseInt(setting.duration) || 500;
-					setting.delay = parseInt(setting.delay);
-					if (fn.isDefined(setting.loop)) {
-						setting.loop = parseInt(setting.loop);
-					}
-					if (!setting.loop) {
-						setting.loop = 'infinite';
-					}
-
-					if (!setting.easing || !(new RegExp(easingType)).test(setting.easing)) {
-						setting.easing = 'linear';
-					}
-
-					if (!setting.direction || !(new RegExp('(normal|reverse|alternate|alternate-reverse)')).test(setting.direction)) {
-						setting.direction = 'normal';
-					}
-
-					if (!setting.fillmode || !(new RegExp('(none|forwards|backwards|both)')).test(setting.fillmode)) {
-						setting.fillmode = 'none';
-					}
-
-					if (fn.isDefined(object)) {
-						if (object.constructor == JetObject) {
-							jetObj = object;
-						} else {
-							jetObj = Jet(object);
-						}
-
-						jetObj.each(function() {
-							var elem = Jet(this);
-							elem.removeCss(resetAnimation);
-							// 0 tick delay to restart the animation
-							setTimeout(function() {
-								elem.css({
-									'animation-name': name,
-									'animation-duration': (setting.duration / 1000) + 's',
-									'animation-iteration-count': setting.loop,
-									'animation-direction': setting.direction,
-									'animation-timing-function': setting.easing,
-									'animation-fill-mode': setting.fillmode,
-									'animation-delay': (setting.delay / 1000) + 's'
-								});
-							}, 0);
-						});
-					}
-					return action;
 				}
 			};
 			return action;
@@ -1616,25 +1578,14 @@
 	};
 
 	/**
-	 * CSS transforms animation class, working with Keyframe class or bind to specified
-	 * elements directly.
+	 * The Transform class uses in Keyframe or animate
 	 *
 	 * @class      Transform (name)
-	 * @param      {PlainObject}   settings  The Transform settings in Plain Object
+	 * @param      {Function}   settings  The Transform settings in Plain Object
 	 * @return     {Transform}  { description_of_the_return_value }
 	 */
-	/**
-	 * CSS transforms animation class, working with Keyframe class or bind to specified
-	 * elements directly.
-	 *
-	 * @class      Transform (name)
-	 * @param      {PlainObject}   settings  The Transform settings in Plain Object
-	 * @param      {DomElement|JetObject}   [elems]  The DOMElements to bind
-	 * @return     {Transform}  { description_of_the_return_value }
-	 */
-	fn.Transform = function(settings, elems) {
+	fn.Transform = function(settings) {
 		var cssProp = {},
-			waitForSetup = false,
 			backface = null,
 			duration = 0,
 			delay = 0,
@@ -1652,13 +1603,11 @@
 				 */
 				set: function(settings) {
 					if (fn.isPlainObject(settings)) {
-						waitForSetup = true;
 						fn.each(settings, function(name, val) {
 							if (regexTransformMethod.test(name)) {
 								self[name].apply(self, (fn.isArray(val)) ? val : [val]);
 							}
 						});
-						waitForSetup = false;
 					}
 					commit();
 					return self;
@@ -1678,6 +1627,7 @@
 					commit();
 					return self;
 				},
+
 
 				/**
 				 * Set the delay time
@@ -1783,6 +1733,7 @@
 					return self;
 				},
 
+
 				/**
 				 * Bind to specified elements
 				 * @memberof   Transform
@@ -1798,19 +1749,6 @@
 						elements = elem;
 						elem.data('transform', self, true);
 						commit();
-					}
-					return self;
-				},
-
-				/**
-				 * Reset all transform value
-				 * @memberof   Transform
-				 *
-				 * @return     {Transform}    { description_of_the_return_value }
-				 */
-				reset: function() {
-					if (elements) {
-						elements.removeCss((((fn.browser.webkit) ? '-webkit-' : '') + 'backface-visibility') + ' transform ');
 					}
 					return self;
 				}
@@ -1850,12 +1788,18 @@
 		}
 
 		function commit() {
-			if (waitForSetup) {
-				return false;
-			}
-
 			// When the Transform has bound elements, update the css style when value has changed
 			if (elements) {
+				elements.css('transform', getTransformSyntax());
+
+				if (backface !== null) {
+					elements.css(((fn.browser.webkit) ? '-webkit-' : '') + 'backface-visibility', (!backface) ? 'hidden' : '');
+				}
+
+				if (Object.keys(cssProp).length > 0) {
+					elements.css(cssProp);
+				}
+
 				if (duration > 0) {
 					// Fix some browser will play the animation from default value if the duration is set
 					setTimeout(function() {
@@ -1864,21 +1808,13 @@
 							while (!!(matches = transitionFormula.exec(Jet(this).css('transition')))) {
 								transition[matches[1]] = matches[0];
 							}
-							transition.transform = 'transform ' + (((duration > 0) ? duration : 0) / 1000) + 's ' + easing + ((delay > 0) ? ' ' + (delay / 1000) + 's' : '');
+							transition.transform = 'transform ' + (((duration > 0) ? duration : 0) / 1000) + 's ' + easing + ' ' + (((delay > 0) ? delay : 0) / 1000) + 's';
 							delete transition.all;
 							transition = Object.keys(transition).map(function (key) {
 								return transition[key];
 							}).join(', ');
 							Jet(this).css('transition', transition);
 						});
-						elements.css('transform', getTransformSyntax());
-						if (backface !== null) {
-							elements.css(((fn.browser.webkit) ? '-webkit-' : '') + 'backface-visibility', (!backface) ? 'hidden' : '');
-						}
-		
-						if (Object.keys(cssProp).length > 0) {
-							elements.css(cssProp);
-						}
 					}, 0);
 				}
 			}
@@ -2127,23 +2063,20 @@
 			return self;
 		};
 
-		var bindElement = null;
-		if (settings && (fn.isDOMElement(settings) || settings.constructor == JetObject)) {
-			bindElement = settings;
-			settings = null;
-		} else if (elems && (fn.isDOMElement(elems) || elems.constructor == JetObject)) {
-			bindElement = elems;
-		}
-		
-		if (bindElement) {
-			self.bind((fn.isDOMElement(bindElement)) ? Jet(bindElement) : bindElement);
-		}
-		
-		if (fn.isPlainObject(settings)) {
-			self.set(settings);
+		if (settings) {
+			var boundSetting = null;
+			if (fn.isDOMElement(settings)) {
+				settings = Jet(settings);
+			}
+			if (settings.constructor == JetObject) {
+				if (!!(boundSetting = settings.data('transform'))) {
+					return boundSetting;
+				}
+				return self.bind(settings);
+			}
 		}
 
-		return self;
+		return self.set(settings);
 	};
 
 	/**
@@ -2600,13 +2533,9 @@
 		removeCss: function(css) {
 			if (fn.isString(css)) {
 				fn.each(this, function() {
-					var elem = this, csslist = css.split(' ');
-					fn.each(csslist, function() {
-						var cc = fn.camelCase(this);
-						if (fn.isDefined(elem.style[cc])) {
-							elem.style[cc] = '';
-						}
-					});
+					if (fn.isDefined(this.style[css])) {
+						this.style[css] = null;
+					}
 				});
 			}
 			return this;
@@ -2721,6 +2650,29 @@
 			return Jet(this[0]);
 		},
 		/**
+		 * Select a range of matched DOM element.
+		 *
+		 * @returns {JetObject}
+		 */
+		get: function(start, length) {
+			if (this.length === 0) return this;
+			start = parseInt(start);
+			if (isNaN(start) || start <= 0) {
+				start = 0;
+			}
+
+			length = parseInt(length);
+			if (isNaN(length) || length <= 0) {
+				length = 1;
+			}
+			var jetObj = new JetObject();
+			for (;length > 0 && start < this.length; length--) {
+				jetObj.push(this[start]);
+				start++;
+			}
+			return jetObj;
+		},
+		/**
 		 * Select the last matched DOM element.
 		 *
 		 * @returns {JetObject}
@@ -2781,13 +2733,17 @@
 					eventName = namespaces.shift().toLowerCase();
 
 				fn.each(this, function(i, elem) {
-					var evt = getEventObject(this, eventName);
-					evt.namespaces = namespaces;
-
-					if (document.createEvent) {
-						elem.dispatchEvent(evt);
+					if (eventName == 'submit') {
+						elem.submit();
 					} else {
-						elem.fireEvent('on' + eventName, evt);
+						var evt = getEventObject(this, eventName);
+						evt.namespaces = namespaces;
+
+						if (document.createEvent) {
+							elem.dispatchEvent(evt);
+						} else {
+							elem.fireEvent('on' + eventName, evt);
+						}
 					}
 				});
 			}
@@ -3050,25 +3006,18 @@
 					top: 0,
 					left: 0
 				},
-				parentOffset = {
-					top: 0,
-					left: 0
-				},
 				elem = this[0],
-				parent;
-			if (fn.isDOMElement(elem)) {
-				parent = this.offsetParent();
-				if (parent[0].nodeName.toLowerCase() != 'html') {
-					parentOffset = parent.offset();
-				}
-				parentOffset.top += parseInt(this.css('border-top-width'));
-				parentOffset.left += parseInt(this.css('border-left-width'));
-				offset = this.boxRect();
+				boxRect, owner;
+
+			if (elem) {
+				boxRect = Jet(elem).boxRect();
+				owner = fn.owner(this).window;
 				return {
-					top: offset.top - parentOffset.top,
-					left: offset.left - parentOffset.left
-				};
+			    left: boxRect.left + owner.scrollX,
+			    top: boxRect.top + owner.scrollY
+			  }
 			}
+
 			return offset;
 		},
 
@@ -3532,6 +3481,7 @@
 						}).checked(true);
 					} else if (regexSubmitName.test(this.tagName)) {
 						this.value = (fn.isCallable(value)) ? value.call(this) : value;
+						Jet(this).attr('value', value);
 					} else if (this.tagName.toLowerCase() == 'select') {
 						if (this.type == 'select-multiple') {
 							if (!fn.isIterator(value)) {
@@ -3546,22 +3496,18 @@
 							return value.indexOf(Jet(this).prop('value')) != -1;
 						}).prop('selected', true);
 					} else {
-						Jet(this).prop('value', value);
+						Jet(this).prop('value', value).attr('value', value);
 					}
+					// Trigger onChange event
+					Jet(this).change();
 				});
 				return this;
 			} else {
 				if (this.length) {
-					var elem = this[0], parent;
+					var elem = this[0], parent, selector = 'input[type=' + Jet(elem).prop('type') + '][name="' + Jet(elem).prop('name') + '"]:checked';
 					if (regexCheckable.test(elem.type)) {
 						parent = Jet(fn.owner(this).document.body);
-						if (elem.type == 'radio') {
-							return parent.find('input[type=' + Jet(elem).prop('type') + '][name="' + Jet(elem).prop('name') + '"]:checked').prop('value');
-						} else {
-							return fn.walk(parent.find('input[type=' + Jet(elem).prop('type') + '][name="' + Jet(elem).prop('name') + '"]:checked'), function() {
-								return Jet(this).prop('value');
-							});
-						}
+						return parent.find(selector).prop('value');
 					} else if (regexSubmitName.test(elem.tagName)) {
 						return elem.value;
 					} else if (elem.tagName.toLowerCase() == 'select') {
@@ -3694,54 +3640,67 @@
 				transition = defineAnimateThread(elem);
 
 				this.animateThread.add(function() {
-					var action = this, allType = true, delay = 0, animationObj = {};
+					var action = this, allType = true, delay = 0, isKeyframe = false, animationObj = {};
 					action.wait();
 
-					if (css.constructor == fn.Transform) {
-						css.set({
-							duration: duration,
-							easing: easing
-						});
-						css.bind(elem);
+					if (css.constructor == fn.Keyframe) {
+						// Reset the animate
+						animationObj[fn.browser.prefix + 'animation-duration'] = (duration / 1000) + 's';
+						animationObj[fn.browser.prefix + 'animation-timing-function'] = easing;
+						animationObj[fn.browser.prefix + 'animation-name'] = css.getName();
+						animationObj[fn.browser.prefix + 'animation-iteration-count'] = 1;
+						Jet(elem).css(animationObj);
+						isKeyframe = true;
 					} else {
-						fn.each(css, function(cssprop, value) {
-							if (fn.isPlainObject(value)) {
-								if (value.value) {
-									if (!value.easing || !(new RegExp(easingType)).test(value.easing)) {
-										value.easing = 'linear';
-									}
-									transition[cssprop] = cssprop + ' ' + ((value.duration || duration) / 1000) + 's ' + (value.easing || easing) + ' '  + ((value.delay || 0) / 1000) + 's';
-									Jet(elem).css(cssprop, value.value);
-									allType = false;
-									if (value.delay > delay) {
-										delay = value.delay;
-									}
-									if (value.duration > duration) {
-										duration = value.duration;
-									}
-								}
-							} else {
-								if (cssprop == 'transform') {
-									value.bind(elem);
-								} else {
-									Jet(elem).css(cssprop, value);
-								}
-								transition[cssprop] = cssprop + ' ' + (duration / 1000) + 's ' + easing + ' 0s';
-							}
-						});
-
-						if (allType) {
-							transition = 'all ' + (duration / 1000) + 's ' + easing + ' 0s';
+						if (css.constructor == fn.Transform) {
+							css.set({
+								duration: duration,
+								easing: easing
+							});
+							css.bind(elem);
 						} else {
-							delete transition.all;
-							transition = Object.keys(transition).map(function (key) {
-								return transition[key];
-							}).join(', ');
+							fn.each(css, function(cssprop, value) {
+								if (fn.isPlainObject(value)) {
+									if (value.value) {
+										if (!value.easing || !(new RegExp(easingType)).test(value.easing)) {
+											value.easing = 'linear';
+										}
+										transition[cssprop] = cssprop + ' ' + ((value.duration || duration) / 1000) + 's ' + (value.easing || easing) + ' '  + ((value.delay || 0) / 1000) + 's';
+										Jet(elem).css(cssprop, value.value);
+										allType = false;
+										if (value.delay > delay) {
+											delay = value.delay;
+										}
+										if (value.duration > duration) {
+											duration = value.duration;
+										}
+									}
+								} else {
+									if (cssprop == 'transform') {
+										value.bind(elem);
+									} else {
+										Jet(elem).css(cssprop, value);
+									}
+									transition[cssprop] = cssprop + ' ' + (duration / 1000) + 's ' + easing + ' 0s';
+								}
+							});
+
+							if (allType) {
+								transition = 'all ' + (duration / 1000) + 's ' + easing + ' 0s';
+							} else {
+								delete transition.all;
+								transition = Object.keys(transition).map(function (key) {
+									return transition[key];
+								}).join(', ');
+							}
+							Jet(elem).css('transition', transition);
 						}
-						Jet(elem).css('transition', transition);
 					}
 
 					setTimeout(function() {
+						if (isKeyframe) {
+							Jet(elem).removeCss('animation-duration').removeCss('animation-timing-function').removeCss('animation-name').removeCss('animation-iteration-count');
+						}
 						if (fn.isCallable(callback)) {
 							callback.call(elem);
 						}
